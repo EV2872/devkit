@@ -29,7 +29,7 @@ jobs:
         run: docker save ${{ env.IMAGE_NAME }} -o /tmp/devkit-image.tar
 
       - name: Upload image artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: devkit-image
           path: /tmp/devkit-image.tar
@@ -90,7 +90,7 @@ jobs:
 
       - name: Upload test results
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: test-results-debug
           path: temp/build/debug/Testing/
@@ -118,7 +118,7 @@ jobs:
             '
 
       - name: Upload release binaries
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: release-binaries
           path: bin/release/
@@ -147,7 +147,7 @@ jobs:
             '
 
       - name: Upload coverage report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: coverage-report
           path: coverage/
@@ -195,7 +195,7 @@ jobs:
             '
 
       - name: Upload docs
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: doxygen-docs
           path: docs/html/
