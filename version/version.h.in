@@ -1,0 +1,20 @@
+#pragma once
+
+// ==============================================================================
+// version.h.in
+// Generado automáticamente por CMake a partir de este template.
+// NO editar el fichero generado (version.h) manualmente — editar aquí y/o
+// el número de versión en el project() del CMakeLists.txt raíz.
+// ==============================================================================
+
+namespace devkit::version {
+
+inline constexpr int kMajor = @PROJECT_VERSION_MAJOR@;
+inline constexpr int kMinor = @PROJECT_VERSION_MINOR@;
+inline constexpr int kPatch = @PROJECT_VERSION_PATCH@;
+
+inline constexpr const char* kVersionString = "@PROJECT_VERSION@";
+inline constexpr const char* kGitCommitHash = "@DEVKIT_GIT_COMMIT_HASH@";
+inline constexpr const char* kBuildType = "@CMAKE_BUILD_TYPE@";
+
+}  // namespace devkit::version

@@ -1,0 +1,225 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  IMAGE_NAME: devkit-fedora-env
+
+jobs:
+  # ============================================================================
+  # Construye la imagen Docker una única vez y la reutiliza en todos los jobs
+  # ============================================================================
+  build-image:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build dev image
+        run: docker compose -f docker/docker-compose.yml build dev-env
+
+      - name: Save image
+        run: docker save ${{ env.IMAGE_NAME }} -o /tmp/devkit-image.tar
+
+      - name: Upload image artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: devkit-image
+          path: /tmp/devkit-image.tar
+          retention-days: 1
+
+  # ============================================================================
+  # Formato: falla si algún fichero no cumple .clang-format
+  # ============================================================================
+  format-check:
+    needs: build-image
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with: { name: devkit-image, path: /tmp }
+      - run: docker load -i /tmp/devkit-image.tar
+
+      - name: Check formatting
+        run: |
+          docker run --rm -v ${{ github.workspace }}:/home/dev/project \
+            ${{ env.IMAGE_NAME }} bash -c '
+              find inc src test -name "*.hpp" -o -name "*.cpp" | \
+              xargs clang-format --dry-run --Werror
+            '
+
+  # ============================================================================
+  # Build + test en Debug, con sanitizers y análisis estático activos
+  # ============================================================================
+  build-and-test-debug:
+    needs: build-image
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with: { name: devkit-image, path: /tmp }
+      - run: docker load -i /tmp/devkit-image.tar
+
+      - name: Configure
+        run: |
+          docker run --rm -v ${{ github.workspace }}:/home/dev/project \
+            ${{ env.IMAGE_NAME }} bash -c '
+              cmake --preset debug
+            '
+
+      - name: Build
+        run: |
+          docker run --rm -v ${{ github.workspace }}:/home/dev/project \
+            ${{ env.IMAGE_NAME }} bash -c '
+              cmake --build --preset debug
+            '
+
+      - name: Test
+        run: |
+          docker run --rm -v ${{ github.workspace }}:/home/dev/project \
+            ${{ env.IMAGE_NAME }} bash -c '
+              ctest --preset debug --output-on-failure
+            '
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-debug
+          path: temp/build/debug/Testing/
+          retention-days: 7
+
+  # ============================================================================
+  # Build + test en Release
+  # ============================================================================
+  build-and-test-release:
+    needs: build-image
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with: { name: devkit-image, path: /tmp }
+      - run: docker load -i /tmp/devkit-image.tar
+
+      - name: Configure, build and test
+        run: |
+          docker run --rm -v ${{ github.workspace }}:/home/dev/project \
+            ${{ env.IMAGE_NAME }} bash -c '
+              cmake --preset release &&
+              cmake --build --preset release &&
+              ctest --build-config Release --test-dir temp/build/release --output-on-failure
+            '
+
+      - name: Upload release binaries
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-binaries
+          path: bin/release/
+          retention-days: 7
+
+  # ============================================================================
+  # Coverage con gcovr, publicado como artefacto HTML navegable
+  # ============================================================================
+  coverage:
+    needs: build-image
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with: { name: devkit-image, path: /tmp }
+      - run: docker load -i /tmp/devkit-image.tar
+
+      - name: Configure, build, test and generate coverage
+        run: |
+          docker run --rm -v ${{ github.workspace }}:/home/dev/project \
+            ${{ env.IMAGE_NAME }} bash -c '
+              cmake --preset coverage &&
+              cmake --build temp/build/coverage &&
+              ctest --test-dir temp/build/coverage --output-on-failure &&
+              cmake --build temp/build/coverage --target coverage
+            '
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage/
+          retention-days: 30
+
+  # ============================================================================
+  # Valgrind memcheck (job separado, más lento — nunca junto a sanitizers)
+  # ============================================================================
+  valgrind:
+    needs: build-image
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with: { name: devkit-image, path: /tmp }
+      - run: docker load -i /tmp/devkit-image.tar
+
+      - name: Configure, build and run memcheck
+        run: |
+          docker run --rm -v ${{ github.workspace }}:/home/dev/project \
+            ${{ env.IMAGE_NAME }} bash -c '
+              cmake --preset valgrind &&
+              cmake --build temp/build/valgrind &&
+              cmake --build temp/build/valgrind --target memcheck
+            '
+
+  # ============================================================================
+  # Documentación con Doxygen, publicada como artefacto navegable
+  # ============================================================================
+  docs:
+    needs: build-image
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with: { name: devkit-image, path: /tmp }
+      - run: docker load -i /tmp/devkit-image.tar
+
+      - name: Generate documentation
+        run: |
+          docker run --rm -v ${{ github.workspace }}:/home/dev/project \
+            ${{ env.IMAGE_NAME }} bash -c '
+              cmake --preset debug -DDEVKIT_BUILD_DOCS=ON &&
+              cmake --build temp/build/debug --target docs
+            '
+
+      - name: Upload docs
+        uses: actions/upload-artifact@v4
+        with:
+          name: doxygen-docs
+          path: docs/html/
+          retention-days: 30
+
+  # ============================================================================
+  # Gate final: resume el estado de todos los jobs anteriores para branch
+  # protection (basta con requerir este único job como "required check")
+  # ============================================================================
+  ci-success:
+    if: always()
+    needs:
+      - format-check
+      - build-and-test-debug
+      - build-and-test-release
+      - coverage
+      - valgrind
+      - docs
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check all jobs succeeded
+        run: |
+          if [[ "${{ contains(needs.*.result, 'failure') }}" == "true" ]]; then
+            echo "Al menos un job ha fallado"
+            exit 1
+          fi
+          echo "Todos los jobs han pasado correctamente"

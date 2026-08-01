@@ -1,0 +1,35 @@
+# Git
+.git
+.gitignore
+
+# IDE
+.vscode
+.idea
+
+# Build
+auxiliar
+bin
+coverage
+docs
+
+# Conan
+.conan
+.conan2
+
+# Cache
+.cache
+.ccache
+
+# Compilación
+*.o
+*.obj
+*.a
+*.so
+*.dll
+*.dylib
+
+# Logs
+*.log
+
+# Configuración local
+.clangd
