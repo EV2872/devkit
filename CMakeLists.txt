@@ -22,7 +22,7 @@ endif()
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
+list(APPEND CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake")
 
 include(StandardProjectSettings)
 include(ccache)
@@ -41,10 +41,10 @@ include(Version)
 find_package(fmt REQUIRED)
 
 # Directorios de salida homogéneos para todas las configuraciones
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_DEBUG          "${CMAKE_SOURCE_DIR}/bin/debug")
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_RELEASE        "${CMAKE_SOURCE_DIR}/bin/release")
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_RELWITHDEBINFO "${CMAKE_SOURCE_DIR}/bin/release")
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY                "${CMAKE_SOURCE_DIR}/bin/debug")
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_DEBUG          "${PROJECT_SOURCE_DIR}/bin/debug")
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_RELEASE        "${PROJECT_SOURCE_DIR}/bin/release")
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_RELWITHDEBINFO "${PROJECT_SOURCE_DIR}/bin/release")
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY                "${PROJECT_SOURCE_DIR}/bin/debug")
 
 # Detecta si devkit es el proyecto top-level o está embebido via FetchContent/add_subdirectory
 if(CMAKE_SOURCE_DIR STREQUAL PROJECT_SOURCE_DIR)
@@ -85,7 +85,7 @@ install(TARGETS devkit_shapes
     RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
 )
 
-install(DIRECTORY ${CMAKE_SOURCE_DIR}/inc/
+install(DIRECTORY ${PROJECT_SOURCE_DIR}/inc/
     DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
 )
 
@@ -103,7 +103,7 @@ write_basic_package_version_file(
 )
 
 install(FILES
-    ${CMAKE_SOURCE_DIR}/cmake/devkitConfig.cmake
+    ${PROJECT_SOURCE_DIR}/cmake/devkitConfig.cmake
     ${CMAKE_CURRENT_BINARY_DIR}/devkitConfigVersion.cmake
     DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/devkit
 )

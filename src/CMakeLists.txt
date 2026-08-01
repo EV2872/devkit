@@ -8,8 +8,8 @@ add_library(devkit::shapes ALIAS devkit_shapes)
 
 target_include_directories(devkit_shapes
     PUBLIC
-        $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/inc>
-        $<BUILD_INTERFACE:${CMAKE_BINARY_DIR}/generated/inc>
+        $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/inc>
+        $<BUILD_INTERFACE:${PROJECT_BINARY_DIR}/generated/inc>
         $<INSTALL_INTERFACE:inc>
 )
 

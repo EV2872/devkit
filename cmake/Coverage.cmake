@@ -37,18 +37,18 @@ function(devkit_register_coverage_target)
     find_program(GCOVR_PROGRAM gcovr REQUIRED)
 
     add_custom_target(coverage
-        COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_SOURCE_DIR}/coverage"
+        COMMAND ${CMAKE_COMMAND} -E make_directory "${PROJECT_SOURCE_DIR}/coverage"
         COMMAND ${GCOVR_PROGRAM}
-                --root "${CMAKE_SOURCE_DIR}"
-                --filter "${CMAKE_SOURCE_DIR}/src/.*"
-                --filter "${CMAKE_SOURCE_DIR}/inc/.*"
-                --exclude "${CMAKE_SOURCE_DIR}/test/.*"
-                --object-directory "${CMAKE_BINARY_DIR}"
+                --root "${PROJECT_SOURCE_DIR}"
+                --filter "${PROJECT_SOURCE_DIR}/src/.*"
+                --filter "${PROJECT_SOURCE_DIR}/inc/.*"
+                --exclude "${PROJECT_SOURCE_DIR}/test/.*"
+                --object-directory "${PROJECT_BINARY_DIR}"
                 --html --html-details
-                --output "${CMAKE_SOURCE_DIR}/coverage/index.html"
+                --output "${PROJECT_SOURCE_DIR}/coverage/index.html"
                 --print-summary
                 --fail-under-line 0
-        WORKING_DIRECTORY "${CMAKE_BINARY_DIR}"
+        WORKING_DIRECTORY "${PROJECT_BINARY_DIR}"
         DEPENDS devkit_tests
         COMMENT "Generando reporte de cobertura en coverage/index.html"
         VERBATIM

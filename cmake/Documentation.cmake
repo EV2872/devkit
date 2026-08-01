@@ -14,20 +14,20 @@ function(devkit_register_docs_target)
 
     find_package(Doxygen REQUIRED dot)
 
-    set(DEVKIT_DOXYGEN_INPUT "${CMAKE_SOURCE_DIR}/inc")
+    set(DEVKIT_DOXYGEN_INPUT "${PROJECT_SOURCE_DIR}/inc")
     if(DEVKIT_DOC_INTERNAL)
-        set(DEVKIT_DOXYGEN_INPUT "${DEVKIT_DOXYGEN_INPUT} ${CMAKE_SOURCE_DIR}/src")
+        set(DEVKIT_DOXYGEN_INPUT "${DEVKIT_DOXYGEN_INPUT} ${PROJECT_SOURCE_DIR}/src")
     endif()
 
-    set(DOXYGEN_IN  "${CMAKE_SOURCE_DIR}/docs/Doxyfile.in")
-    set(DOXYGEN_OUT "${CMAKE_BINARY_DIR}/Doxyfile")
+    set(DOXYGEN_IN  "${PROJECT_SOURCE_DIR}/docs/Doxyfile.in")
+    set(DOXYGEN_OUT "${PROJECT_BINARY_DIR}/Doxyfile")
 
     configure_file(${DOXYGEN_IN} ${DOXYGEN_OUT} @ONLY)
 
     add_custom_target(docs
-        COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_SOURCE_DIR}/docs"
+        COMMAND ${CMAKE_COMMAND} -E make_directory "${PROJECT_SOURCE_DIR}/docs"
         COMMAND ${DOXYGEN_EXECUTABLE} ${DOXYGEN_OUT}
-        WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+        WORKING_DIRECTORY ${PROJECT_BINARY_DIR}
         COMMENT "Generando documentación con Doxygen en docs/html"
         VERBATIM
     )

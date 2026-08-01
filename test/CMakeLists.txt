@@ -22,10 +22,10 @@ devkit_configure_target(devkit_tests)
 # cada TEST()/TEST_F() por separado, con su propio resultado pass/fail.
 include(GoogleTest)
 gtest_discover_tests(devkit_tests
-    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+    WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
     PROPERTIES LABELS "unit"
 )
 
 set_target_properties(devkit_tests PROPERTIES
-    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}/bin/test"
+    RUNTIME_OUTPUT_DIRECTORY "${PROJECT_SOURCE_DIR}/bin/test"
 )

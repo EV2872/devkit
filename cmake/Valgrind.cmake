@@ -27,10 +27,10 @@ function(devkit_register_valgrind_target)
                 --show-leak-kinds=all
                 --track-origins=yes
                 --error-exitcode=1
-                --suppressions=${CMAKE_SOURCE_DIR}/cmake/valgrind.supp
+                --suppressions=${PROJECT_SOURCE_DIR}/cmake/valgrind.supp
                 $<TARGET_FILE:devkit_tests>
         DEPENDS devkit_tests
-        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+        WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
         COMMENT "Ejecutando devkit_tests bajo valgrind memcheck"
         VERBATIM
     )
