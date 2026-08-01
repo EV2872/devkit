@@ -1,0 +1,26 @@
+# ==============================================================================
+# .clangd
+# Configuración del language server para IDEs/editores (VSCode, Neovim, etc.)
+# ==============================================================================
+CompileFlags:
+  CompilationDatabase: temp/build/debug
+  Add:
+    - -Wall
+    - -Wextra
+  Remove:
+    - -fomit-frame-pointer   # No útil/relevante para el análisis del LSP
+
+Diagnostics:
+  ClangTidy:
+    Add: [bugprone-*, modernize-*, performance-*, readability-*]
+    Remove: [modernize-use-trailing-return-type]
+  UnusedIncludes: Strict
+  MissingIncludes: Strict
+
+InlayHints:
+  Enabled: true
+  ParameterNames: true
+  DeducedTypes: true
+
+Index:
+  Background: Build

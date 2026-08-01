@@ -1,0 +1,109 @@
+cmake_minimum_required(VERSION 3.25)
+
+project(devkit
+    VERSION 0.1.0
+    DESCRIPTION "Plantilla profesional de proyecto C++"
+    LANGUAGES CXX
+)
+
+# Detecta si devkit es el proyecto top-level o está embebido via FetchContent/add_subdirectory
+if(CMAKE_SOURCE_DIR STREQUAL PROJECT_SOURCE_DIR)
+    set(DEVKIT_IS_TOP_LEVEL ON)
+else()
+    set(DEVKIT_IS_TOP_LEVEL OFF)
+endif()
+
+# Como top-level, SIEMPRE forzamos nuestro estándar (incluso si el toolchain de
+# Conan ya definió uno, p. ej. compiler.cppstd=gnu17). Como dependencia embebida
+# (FetchContent), respetamos el estándar que ya haya fijado el proyecto padre.
+if(DEVKIT_IS_TOP_LEVEL OR NOT DEFINED CMAKE_CXX_STANDARD)
+    set(CMAKE_CXX_STANDARD 20)
+endif()
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
+
+include(StandardProjectSettings)
+include(ccache)
+include(CompilerWarnings)
+include(Sanitizers)
+include(DebugInfo)
+include(StaticAnalyzers)
+include(Cppcheck)
+include(Optimizations)
+include(Coverage)
+include(Documentation)
+include(Valgrind)
+include(Devkit)
+include(Version)
+
+find_package(fmt REQUIRED)
+
+# Directorios de salida homogéneos para todas las configuraciones
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_DEBUG          "${CMAKE_SOURCE_DIR}/bin/debug")
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_RELEASE        "${CMAKE_SOURCE_DIR}/bin/release")
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_RELWITHDEBINFO "${CMAKE_SOURCE_DIR}/bin/release")
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY                "${CMAKE_SOURCE_DIR}/bin/debug")
+
+# Detecta si devkit es el proyecto top-level o está embebido via FetchContent/add_subdirectory
+if(CMAKE_SOURCE_DIR STREQUAL PROJECT_SOURCE_DIR)
+    set(DEVKIT_IS_TOP_LEVEL ON)
+else()
+    set(DEVKIT_IS_TOP_LEVEL OFF)
+endif()
+
+option(DEVKIT_BUILD_TESTS "Compilar los tests" ${DEVKIT_IS_TOP_LEVEL})
+option(DEVKIT_BUILD_APP "Compilar el ejecutable devkit_app" ${DEVKIT_IS_TOP_LEVEL})
+
+add_subdirectory(src)
+
+if(DEVKIT_BUILD_APP)
+    add_subdirectory(app)
+endif()
+
+if(DEVKIT_BUILD_TESTS)
+    enable_testing()
+    add_subdirectory(test)
+endif()
+
+devkit_register_coverage_target()
+devkit_register_valgrind_target()
+devkit_register_cppcheck_target()
+
+
+# ==============================================================================
+# Instalación / exportación — permite `cmake --install` y que Conan empaquete
+# la librería, exponiendo el target devkit::shapes a quien la consuma.
+# ==============================================================================
+include(GNUInstallDirs)
+
+install(TARGETS devkit_shapes
+    EXPORT devkitTargets
+    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+)
+
+install(DIRECTORY ${CMAKE_SOURCE_DIR}/inc/
+    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+)
+
+install(EXPORT devkitTargets
+    FILE devkitTargets.cmake
+    NAMESPACE devkit::
+    DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/devkit
+)
+
+include(CMakePackageConfigHelpers)
+write_basic_package_version_file(
+    ${CMAKE_CURRENT_BINARY_DIR}/devkitConfigVersion.cmake
+    VERSION ${PROJECT_VERSION}
+    COMPATIBILITY SameMajorVersion
+)
+
+install(FILES
+    ${CMAKE_SOURCE_DIR}/cmake/devkitConfig.cmake
+    ${CMAKE_CURRENT_BINARY_DIR}/devkitConfigVersion.cmake
+    DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/devkit
+)

@@ -1,0 +1,30 @@
+services:
+  dev-env:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+
+    image: devkit-fedora-env
+
+    container_name: devkit_container
+
+    working_dir: /home/dev/project
+
+    stdin_open: true
+    tty: true
+
+    volumes:
+      - ..:/home/dev/project:z
+      - ccache:/home/dev/.cache/ccache
+      - conan:/home/dev/.conan2
+
+    cap_add:
+      - SYS_PTRACE
+      - PERFMON
+
+    security_opt:
+      - seccomp:unconfined
+
+volumes:
+  ccache:
+  conan:

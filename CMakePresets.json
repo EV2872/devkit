@@ -1,0 +1,75 @@
+{
+  "version": 6,
+  "cmakeMinimumRequired": { "major": 3, "minor": 25, "patch": 0 },
+  "configurePresets": [
+    {
+      "name": "base",
+      "hidden": true,
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/temp/build/${presetName}",
+      "cacheVariables": {
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
+        "CMAKE_TOOLCHAIN_FILE": "${sourceDir}/temp/build/${presetName}/conan_toolchain.cmake",
+        "DEVKIT_BUILD_DOCS": "OFF"
+      }
+    },
+    {
+      "name": "debug",
+      "displayName": "Debug",
+      "inherits": "base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "ENABLE_CLANG_TIDY": "ON",
+        "ENABLE_CPPCHECK": "ON",
+        "ENABLE_IWYU": "OFF"
+      }
+    },
+    {
+      "name": "valgrind",
+      "displayName": "Debug (Valgrind, sin sanitizers)",
+      "inherits": "base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "ENABLE_SANITIZERS": "OFF",
+        "DEVKIT_ENABLE_VALGRIND": "ON",
+        "ENABLE_CLANG_TIDY": "OFF",
+        "ENABLE_CPPCHECK": "OFF"
+      }
+    },
+    {
+      "name": "release",
+      "displayName": "Release",
+      "inherits": "base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "ENABLE_CLANG_TIDY": "OFF",
+        "ENABLE_CPPCHECK": "OFF"
+      }
+    },
+    {
+      "name": "coverage",
+      "displayName": "Coverage",
+      "inherits": "base",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "DEVKIT_ENABLE_COVERAGE": "ON",
+        "ENABLE_CLANG_TIDY": "OFF",
+        "ENABLE_CPPCHECK": "OFF"
+      }
+    }
+  ],
+  "buildPresets": [
+    { "name": "debug",    "configurePreset": "debug" },
+    { "name": "release",  "configurePreset": "release" },
+    { "name": "coverage", "configurePreset": "coverage" },
+    { "name": "valgrind", "configurePreset": "valgrind" }
+  ],
+  "testPresets": [
+    {
+      "name": "debug",
+      "configurePreset": "debug",
+      "output": { "outputOnFailure": true },
+      "execution": { "noTestsAction": "error", "stopOnFailure": false }
+    }
+  ]
+}

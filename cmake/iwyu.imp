@@ -1,0 +1,9 @@
+# ==============================================================================
+# iwyu.imp
+# Mapeo de IWYU para evitar falsos positivos con fmt (cabeceras internas de
+# fmt no deben sugerirse en vez de las públicas fmt/core.h, fmt/format.h...)
+# ==============================================================================
+[
+  { "include": ["\"fmt/base.h\"", "private", "\"fmt/core.h\"", "public"] },
+  { "include": ["<fmt/bits/*.h>", "private", "<fmt/core.h>", "public"] }
+]

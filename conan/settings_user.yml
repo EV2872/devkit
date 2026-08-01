@@ -1,0 +1,13 @@
+# ==============================================================================
+# settings_user.yml
+# Extiende settings.yml de Conan para reconocer versiones de compilador más
+# recientes que las que trae por defecto conan==2.9.2:
+#   - GCC 16.1.1 (Fedora 44 / Red Hat build)
+#   - Clang 22.1.8 (Fedora 44)
+# Ver: https://docs.conan.io/2/reference/config_files/settings.html
+# ==============================================================================
+compiler:
+  gcc:
+    version: [15, 15.1, 16, 16.1]
+  clang:
+    version: [19, 20, 21, 22, "22.1"]

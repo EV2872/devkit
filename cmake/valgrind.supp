@@ -1,0 +1,15 @@
+# ==============================================================================
+# valgrind.supp
+# Supresiones de falsos positivos conocidos (ej. en libstdc++/runtime de GTest).
+# Cada supresión DEBE tener un comentario explicando por qué es segura.
+# ==============================================================================
+
+{
+   libstdc++_dl_init_false_positive
+   Memcheck:Leak
+   match-leak-kinds: reachable
+   ...
+   fun:_dl_init
+   # Falso positivo conocido: inicialización del dynamic linker, no es un
+   # leak real de nuestro código ni de fmt/gtest.
+}

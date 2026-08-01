@@ -1,0 +1,5 @@
+# ==============================================================================
+# Documentación del remote usado (informativo — el remote real se añade con
+# `conan remote add` en el Dockerfile o CI, no se versiona la config binaria)
+# ==============================================================================
+conancenter https://center.conan.io
