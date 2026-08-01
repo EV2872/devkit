@@ -38,7 +38,26 @@ include(Valgrind)
 include(Devkit)
 include(Version)
 
-find_package(fmt REQUIRED)
+# ==============================================================================
+# fmt: si el target ya existe (traído por Conan, o por el consumidor vía su
+# propio FetchContent/add_subdirectory antes de embebernos), lo reutilizamos.
+# Si no existe (p. ej. alguien nos consume con FetchContent "a pelo", sin
+# Conan), lo traemos nosotros mismos — devkit es responsable de su propia
+# dependencia, el consumidor no debería tener que saber que la usamos.
+# ==============================================================================
+if(NOT TARGET fmt::fmt)
+    find_package(fmt QUIET)
+endif()
+
+if(NOT TARGET fmt::fmt)
+    include(FetchContent)
+    FetchContent_Declare(
+        fmt
+        GIT_REPOSITORY https://github.com/fmtlib/fmt.git
+        GIT_TAG        11.0.2
+    )
+    FetchContent_MakeAvailable(fmt)
+endif()
 
 # Directorios de salida homogéneos para todas las configuraciones
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY_DEBUG          "${PROJECT_SOURCE_DIR}/bin/debug")
