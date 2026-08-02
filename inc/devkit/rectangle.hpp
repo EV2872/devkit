@@ -1,13 +1,15 @@
 #ifndef RECTANGLE_HPP
 #define RECTANGLE_HPP
 
+#include "devkit/export.h"
+
 #include <string>
 #include "shape.hpp"
 
 namespace devkit {
 
 /// @brief Representa un círculo definido por su radio.
-class Rectangle final : public Shape {
+class DEVKIT_API Rectangle final : public Shape {
    public:
     /// @brief Construye un círculo.
     /// @param radius Radio del círculo, en unidades arbitrarias. Debe ser >= 0.

@@ -74,6 +74,7 @@ endif()
 
 option(DEVKIT_BUILD_TESTS "Compilar los tests" ${DEVKIT_IS_TOP_LEVEL})
 option(DEVKIT_BUILD_APP "Compilar el ejecutable devkit_app" ${DEVKIT_IS_TOP_LEVEL})
+option(DEVKIT_BUILD_BENCHMARKS "Compilar los benchmarks" OFF)
 
 add_subdirectory(src)
 
@@ -84,6 +85,10 @@ endif()
 if(DEVKIT_BUILD_TESTS)
     enable_testing()
     add_subdirectory(test)
+endif()
+
+if(DEVKIT_BUILD_BENCHMARKS)
+    add_subdirectory(benchmark)
 endif()
 
 devkit_register_coverage_target()
@@ -106,6 +111,10 @@ install(TARGETS devkit_shapes
 
 install(DIRECTORY ${PROJECT_SOURCE_DIR}/inc/
     DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+)
+
+install(FILES ${CMAKE_CURRENT_BINARY_DIR}/src/generated/inc/devkit/export.h
+    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/devkit
 )
 
 install(EXPORT devkitTargets

@@ -1,12 +1,14 @@
 #ifndef CIRCLE_HPP
 #define CIRCLE_HPP
 
+#include "devkit/export.h"
+
 #include <string>
 #include "shape.hpp"
 
 namespace devkit {
 
-class Circle final : public Shape {
+class DEVKIT_API Circle final : public Shape {
    public:
     explicit Circle(double radius);
 

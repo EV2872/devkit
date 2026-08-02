@@ -1,0 +1,35 @@
+{
+  "name": "devkit",
+  "dockerComposeFile": "../docker/docker-compose.yml",
+  "service": "dev-env",
+  "workspaceFolder": "/home/dev/project",
+  "customizations": {
+    "vscode": {
+      "settings": {
+        "C_Cpp.intelliSenseEngine": "disabled",
+        "clangd.path": "/usr/bin/clangd",
+        "clangd.arguments": [
+          "--query-driver=/usr/bin/clang++,/usr/bin/g++"
+        ],
+        "cmake.configureOnOpen": false,
+        "editor.formatOnSave": true,
+        "files.associations": {
+          "*.h.in": "cpp",
+          "CMakeLists.txt": "cmake"
+        }
+      },
+      "extensions": [
+        "llvm-vs-code-extensions.vscode-clangd",
+        "ms-vscode.cmake-tools",
+        "twxs.cmake",
+        "ms-vscode.cpptools-themes",
+        "ms-azuretools.vscode-containers",
+        "ms-azuretools.vscode-docker",
+        "ms-vscode-remote.remote-containers",
+        "cschlosser.doxdocgen",
+        "streetsidesoftware.code-spell-checker"
+      ]
+    }
+  },
+  "remoteUser": "dev"
+}

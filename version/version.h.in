@@ -1,4 +1,5 @@
-#pragma once
+#ifndef VERSION_H
+#define VERSION_H
 
 // ==============================================================================
 // version.h.in
@@ -18,3 +19,5 @@ inline constexpr const char* kGitCommitHash = "@DEVKIT_GIT_COMMIT_HASH@";
 inline constexpr const char* kBuildType = "@CMAKE_BUILD_TYPE@";
 
 }  // namespace devkit::version
+
+#endif

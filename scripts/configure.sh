@@ -5,20 +5,23 @@
 # en el orden correcto — conan SIEMPRE antes de cmake, nunca al revés.
 #
 # Uso:
-#   ./scripts/configure.sh <preset> [compilador]
+#   ./scripts/configure.sh <preset> [compilador] [shared]
 #
 #   <preset>      debug | release | coverage | valgrind   (default: debug)
 #   [compilador]  default | gcc | clang                   (default: default)
+#   [shared]      static | shared                         (default: static)
 #
 # Ejemplos:
-#   ./scripts/configure.sh debug              # preset debug, perfil Conan 'default' (autodetectado)
-#   ./scripts/configure.sh debug clang         # preset debug, forzando el perfil 'fedora-clang'
-#   ./scripts/configure.sh release gcc         # preset release, forzando el perfil 'fedora-gcc'
+#   ./scripts/configure.sh debug                     # preset debug, perfil default, estático
+#   ./scripts/configure.sh debug clang                # preset debug, forzando clang, estático
+#   ./scripts/configure.sh debug default shared       # preset debug, perfil default, .so
+#   ./scripts/configure.sh release clang shared       # release, clang, compartida
 # ==============================================================================
 set -euo pipefail
 
 PRESET="${1:-debug}"
 COMPILER="${2:-default}"
+LINKAGE="${3:-static}"
 
 declare -A BUILD_TYPES=(
     [debug]="Debug"
@@ -46,12 +49,22 @@ if [[ "${COMPILER}" != "default" ]]; then
     echo "==> Forzando perfil de compilador: ${PROFILE_NAME}"
 fi
 
-echo "==> conan install (preset=${PRESET}, build_type=${BUILD_TYPE}, compiler=${COMPILER})"
+CONAN_SHARED_ARGS=()
+if [[ "${LINKAGE}" == "shared" ]]; then
+    CONAN_SHARED_ARGS=(-o "&:shared=True")
+    echo "==> Compilando devkit_shapes como biblioteca compartida (.so)"
+elif [[ "${LINKAGE}" != "static" ]]; then
+    echo "❌ Valor de linkage desconocido: '${LINKAGE}'. Usa 'static' o 'shared'." >&2
+    exit 1
+fi
+
+echo "==> conan install (preset=${PRESET}, build_type=${BUILD_TYPE}, compiler=${COMPILER}, linkage=${LINKAGE})"
 conan install . \
     --output-folder="${OUTPUT_DIR}" \
     --build=missing \
     -c user.devkit:local_dev=True \
     "${CONAN_PROFILE_ARGS[@]}" \
+    "${CONAN_SHARED_ARGS[@]}" \
     -s build_type="${BUILD_TYPE}"
 
 echo "==> cmake --preset ${PRESET}"

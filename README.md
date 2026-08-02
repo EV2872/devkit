@@ -174,7 +174,7 @@ cmake --build --preset debug
 `cmake --preset <preset>` **no** ejecuta `conan install` por sí solo. Cada preset (`debug`, `release`, `coverage`, `valgrind`) usa su propia carpeta de build (`temp/build/<preset>/`) con su propio `conan_toolchain.cmake`, que Conan debe generar **antes** de que CMake pueda leerlo. `scripts/configure.sh <preset>` hace ambos pasos en el orden correcto:
 
 ```bash
-./scripts/configure.sh <debug|release|coverage|valgrind> [default|gcc|clang]
+./scripts/configure.sh <debug|release|coverage|valgrind> [default|gcc|clang] [static|shared]
 ```
 
 El segundo argumento (opcional, por defecto `default`) permite elegir el compilador:
@@ -188,17 +188,28 @@ El segundo argumento (opcional, por defecto `default`) permite elegir el compila
 
 > Antes de forzar `gcc`/`clang`, verifica que `conan/profiles/fedora-gcc` y `conan/profiles/fedora-clang` tengan el `compiler.version` correcto para tu imagen (`gcc --version` / `clang --version` dentro del contenedor) — si no coincide, Conan fallará con `Invalid setting`. Si además usas una versión de compilador no incluida en el catálogo de Conan, añádela también a `conan/settings_user.yml` (ver sección 8).
 
-Al cambiar de compilador es recomendable limpiar el build previo, ya que los artefactos de un compilador no son compatibles con los del otro:
+El tercer argumento (opcional, por defecto `static`) permite compilar `devkit_shapes` como biblioteca compartida (`.so`) en vez de estática (`.a`):
+
+```bash
+./scripts/configure.sh debug                       # estática (por defecto)
+./scripts/configure.sh debug default shared         # compartida (.so)
+./scripts/configure.sh release clang shared         # combinable con compilador y preset
+```
+
+Ver sección 6.12 para el mecanismo que hace esto posible (`generate_export_header`) y la sección 7.2 para el efecto en consumidores externos vía `FetchContent`.
+
+Al cambiar de compilador o de tipo de enlazado es recomendable limpiar el build previo, ya que los artefactos no son compatibles entre sí:
 
 ```bash
 rm -rf temp/build
-./scripts/configure.sh debug clang
+./scripts/configure.sh debug clang shared
 ```
 
 Solo hace falta volver a ejecutar `configure.sh` si:
 - Cambias `conanfile.py` (nueva dependencia, cambio de versión, etc.)
 - Borras `temp/build/`
 - Cambias de compilador (`gcc` ↔ `clang` ↔ `default`)
+- Cambias de tipo de enlazado (`static` ↔ `shared`)
 - Es la primera vez que usas ese preset
 
 Para simplemente recompilar tras editar código, basta con `cmake --build --preset <preset>`.
@@ -320,7 +331,7 @@ cmake --preset debug -DENABLE_THREAD_SANITIZER=ON
 2. Añade el `.cpp` a la lista de fuentes en `src/CMakeLists.txt`:
 
    ```cmake
-   add_library(devkit_shapes STATIC
+   add_library(devkit_shapes
        circle.cpp
        rectangle.cpp
        shape_printer.cpp
@@ -328,7 +339,25 @@ cmake --preset debug -DENABLE_THREAD_SANITIZER=ON
    )
    ```
 
-3. Recompila (no hace falta `configure.sh`, solo build):
+   > Nota: `add_library` **no** lleva `STATIC` explícito a propósito — así respeta `BUILD_SHARED_LIBS`, permitiendo compilar como `.so` cuando se pide (ver sección 6.12).
+
+3. Si la nueva clase/función es parte de la **API pública** (se usa fuera de `devkit`), añade `#include "devkit/export.h"` y marca la clase/función con `DEVKIT_API` — necesario para que sus símbolos se exporten correctamente en modo compartido:
+
+   ```cpp
+   #pragma once
+
+   #include "devkit/export.h"
+
+   namespace devkit {
+
+   class DEVKIT_API Nuevo {
+       ...
+   };
+
+   }  // namespace devkit
+   ```
+
+4. Recompila (no hace falta `configure.sh`, solo build):
 
    ```bash
    cmake --build --preset debug
@@ -383,6 +412,51 @@ Tras cualquier cambio en `.clang-tidy`, no hace falta reconfigurar CMake, solo r
 cmake --build --preset debug
 ```
 
+### 6.11. Al editar cualquier fichero de `cmake/*.cmake`: usa `PROJECT_SOURCE_DIR`, no `CMAKE_SOURCE_DIR`
+
+Todos los módulos propios de `devkit` (`cmake/*.cmake`, `src/CMakeLists.txt`, `app/CMakeLists.txt`, `test/CMakeLists.txt`, el `CMakeLists.txt` raíz) referencian rutas de `devkit` usando `PROJECT_SOURCE_DIR`/`PROJECT_BINARY_DIR`, **no** `CMAKE_SOURCE_DIR`/`CMAKE_BINARY_DIR`. Es una regla deliberada, no un detalle de estilo:
+
+- `CMAKE_SOURCE_DIR` es **global**: siempre apunta al proyecto top-level real, sea `devkit` o quien lo esté consumiendo (por ejemplo, vía `FetchContent`).
+- `PROJECT_SOURCE_DIR` es **relativo al último `project()` evaluado**: dentro de `devkit/CMakeLists.txt`, siempre apunta a la raíz de `devkit`, esté embebido o no.
+
+Si usas `CMAKE_SOURCE_DIR` en un fichero de `devkit` y alguien te consume vía `FetchContent`, ese `include()`/esa ruta apuntará a la raíz del proyecto **consumidor**, no a la de `devkit`, y fallará con errores como `include could not find requested file`.
+
+**Únicas dos excepciones**, donde `CMAKE_SOURCE_DIR`/`CMAKE_BINARY_DIR` sí son correctos:
+
+- `cmake/Cppcheck.cmake` — `compile_commands.json` siempre se genera en la raíz del build del proyecto top-level real, nunca en `PROJECT_BINARY_DIR` de una subunidad.
+- La detección de `DEVKIT_IS_TOP_LEVEL` en `CMakeLists.txt` (`if(CMAKE_SOURCE_DIR STREQUAL PROJECT_SOURCE_DIR)`) — necesita comparar la variable global contra la local precisamente para saber si son la misma.
+
+### 6.12. Compilar `devkit_shapes` como biblioteca compartida (`.so`)
+
+Por defecto, `devkit_shapes` se compila **estática** (`.a`). Para compilarla como compartida:
+
+```bash
+rm -rf temp/build
+./scripts/configure.sh debug default shared
+cmake --build --preset debug
+```
+
+Verifica que el `.so` se generó y que los símbolos están correctamente exportados:
+
+```bash
+ldd bin/debug/devkit_tests | grep devkit
+nm -D temp/build/debug/src/libdevkit_shapes.so | grep -i circle   # deben aparecer como 'T' (exportado)
+```
+
+**Por qué esto funciona sin exponer todo por accidente:** el proyecto fija `CMAKE_CXX_VISIBILITY_PRESET hidden` globalmente (`cmake/StandardProjectSettings.cmake`) — buena práctica que oculta todos los símbolos por defecto en una biblioteca compartida. Para que las clases/funciones públicas (`Circle`, `Rectangle`, `Shape`, `DescribeShape`) sigan siendo visibles pese a eso, `src/CMakeLists.txt` usa `generate_export_header()` de CMake, que genera automáticamente `inc/devkit/export.h` con el macro `DEVKIT_API`. Cada clase/función pública se marca explícitamente:
+
+```cpp
+class DEVKIT_API Circle final : public Shape { ... };
+[[nodiscard]] DEVKIT_API std::string DescribeShape(const Shape& shape);
+```
+
+`DEVKIT_API` se expande de forma distinta según el contexto:
+- Compilando `devkit_shapes` como `.so` → exporta el símbolo (`visibility("default")`).
+- Consumiendo el `.so` ya compilado → no hace falta nada especial en GCC/Clang.
+- Compilando como `.a` (estático, el caso por defecto) → el macro no hace nada.
+
+Si añades una nueva clase/función pública a la librería, recuerda marcarla con `DEVKIT_API` (ver sección 6.6) — si no, quedará oculta en modo compartido aunque funcione perfectamente en modo estático (el bug pasaría desapercibido hasta que alguien active `shared`).
+
 ---
 
 ## 7. Reutilizar `devkit_shapes` en otro proyecto
@@ -416,6 +490,48 @@ target_link_libraries(mi_app PRIVATE devkit::shapes)
 ```
 
 Por defecto, si `devkit` no es el proyecto top-level, `DEVKIT_BUILD_TESTS` y `DEVKIT_BUILD_APP` se desactivan automáticamente (no hace falta que el consumidor los apague a mano), y `CMAKE_CXX_STANDARD` respeta el que ya haya fijado el proyecto padre si existe.
+
+**`fmt` se resuelve automáticamente.** `devkit` comprueba si el target `fmt::fmt` ya existe (por ejemplo, traído por Conan) y, si no, lo trae él mismo vía `FetchContent` — el consumidor no necesita declarar `fmt` por su cuenta para que `devkit::shapes` compile. Si tu propio código (no solo `devkit`) usa `fmt` directamente, sí debes añadir `fmt::fmt` a tu propio `target_link_libraries`, ya que `devkit_shapes` lo linka como `PRIVATE` y no lo propaga.
+
+**Los sanitizers, si están activos en `devkit` (Debug), sí se propagan y son responsabilidad del consumidor.** Como `devkit_shapes` es una biblioteca estática, `-fsanitize=address,undefined` se declara `PUBLIC` en `cmake/Sanitizers.cmake` — cualquier target que enlace contra `devkit::shapes` en modo Debug heredará esos flags automáticamente (necesario, ya que mezclar código con y sin sanitizers en el mismo binario no es seguro). Esto implica que:
+
+- Tu proyecto consumidor necesita tener instalado el runtime de sanitizers de su compilador (`libasan`, `libubsan` — en Fedora: `sudo dnf install libasan libubsan`) si compila en Debug.
+- Si no quieres esa dependencia, define tu propio preset con `CMAKE_BUILD_TYPE=Release` (`devkit` desactiva los sanitizers fuera de Debug) — ver ejemplo abajo.
+
+**`CMakePresets.json` no se hereda vía `FetchContent`.** Los presets de `devkit` (`debug`, `release`, `coverage`, `valgrind`) son internos a su propio repo y no están disponibles para el consumidor. Si quieres un preset `release` en tu propio proyecto:
+
+```json
+{
+  "version": 6,
+  "cmakeMinimumRequired": { "major": 3, "minor": 25, "patch": 0 },
+  "configurePresets": [
+    {
+      "name": "release",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build-release",
+      "cacheVariables": { "CMAKE_BUILD_TYPE": "Release" }
+    }
+  ],
+  "buildPresets": [
+    { "name": "release", "configurePreset": "release" }
+  ]
+}
+```
+
+Al fijar `CMAKE_BUILD_TYPE=Release` en tu propio preset, `devkit` compila `devkit_shapes` con `-O3`+LTO y sin sanitizers, igual que en su propio flujo interno — sin que tengas que configurar nada adicional.
+
+**`BUILD_SHARED_LIBS` sí tiene efecto para un consumidor vía `FetchContent`, y se controla desde tu propio `CMakeLists.txt`** (no hay equivalente al flag `shared` de Conan cuando no usas Conan). Como `add_library(devkit_shapes ...)` no fija `STATIC`/`SHARED` explícitamente (ver sección 6.12), respeta la variable global `BUILD_SHARED_LIBS` del proyecto que lo embebe:
+
+```cmake
+# Antes de FetchContent_MakeAvailable(devkit)
+set(BUILD_SHARED_LIBS ON)   # devkit_shapes se compilará como .so
+
+FetchContent_MakeAvailable(devkit)
+```
+
+O equivalentemente, desde la línea de comandos al configurar tu propio proyecto: `cmake --preset default -DBUILD_SHARED_LIBS=ON`. Ambas formas funcionan porque `BUILD_SHARED_LIBS` es una única variable de caché compartida por todo el árbol de build (incluida la subunidad de `devkit` traída por `FetchContent`), no algo que se herede o configure por separado.
+
+No hace falta ningún paso adicional para que el ejecutable encuentre el `.so` en tiempo de ejecución: CMake fija automáticamente el RPATH del binario para apuntar a la carpeta de build donde queda `libdevkit_shapes.so` (dentro de `build/_deps/devkit-build/src/`), así que `./mi_proyecto` funciona directamente sin tocar `LD_LIBRARY_PATH`. Esto cambia si luego **instalas** el binario fuera del árbol de build (`cmake --install`) — en ese caso, gestiona el RPATH de instalación como en cualquier proyecto CMake con dependencias compartidas.
 
 ### 7.3. `cmake --install` (sin Conan)
 
@@ -549,25 +665,6 @@ El proyecto mantiene un `CHANGELOG.md` en la raíz siguiendo [Keep a Changelog](
 
 ---
 
-
-
-Si necesitas una herramienta nueva del sistema (por ejemplo, otro compilador, un profiler distinto, etc.):
-
-1. Añádela a la lista de `dnf install` en `docker/Dockerfile`.
-2. Si es un paquete de Python (como `conan`/`gcovr`), añádela con versión fijada en `docker/requirements.txt`.
-3. Reconstruye la imagen:
-
-   ```bash
-   docker-compose -f docker/docker-compose.yml down
-   docker-compose -f docker/docker-compose.yml build
-   docker-compose -f docker/docker-compose.yml up -d
-   docker-compose -f docker/docker-compose.yml exec dev-env bash
-   ```
-
-> **Importante:** cualquier instalación hecha en caliente dentro del contenedor (`sudo dnf install ...` mientras estás dentro) se pierde al reconstruir la imagen. Si algo funciona probándolo así, siempre hay que trasladarlo también al `Dockerfile` para que quede persistente.
-
----
-
 ## 9. Añadir nuevas herramientas al entorno (Dockerfile)
 
 Si necesitas una herramienta nueva del sistema (por ejemplo, otro compilador, un profiler distinto, etc.):
@@ -600,6 +697,12 @@ Si necesitas una herramienta nueva del sistema (por ejemplo, otro compilador, un
 | `unknown warning option` en clang-tidy sobre flags como `-Wduplicated-cond` | clang-tidy usa su propio front-end de Clang, no reconoce flags exclusivos de GCC | Ya mitigado con `--extra-arg=-Wno-unknown-warning-option` en `cmake/StaticAnalyzers.cmake` |
 | `CMake Error: No se permiten builds in-source` al ejecutar `conan create .` | `conanfile.py` sin `layout()`, o `layout()` mal configurado, hace coincidir source y build folder | Usa `cmake_layout(self)` en `layout()`, condicionado a que no se haya pasado `-c user.devkit:local_dev=True` (ver sección 7.4) |
 | Rutas de build duplicadas (`temp/build/debug/temp/build/Debug/...`) al ejecutar `scripts/configure.sh` | `layout()` del `conanfile.py` interfiere con `--output-folder` | Añade el flag `-c user.devkit:local_dev=True` en `scripts/configure.sh` y haz que `layout()` retorne temprano si esa conf está presente |
+| `include could not find requested file: StandardProjectSettings` (u otro módulo) al consumir `devkit` vía `FetchContent` | Un fichero de `cmake/` o el `CMakeLists.txt` usa `CMAKE_SOURCE_DIR` (global) en vez de `PROJECT_SOURCE_DIR` (relativo a `devkit`) | Ver sección 6.11 — sustituye por `PROJECT_SOURCE_DIR`/`PROJECT_BINARY_DIR`, salvo en `cmake/Cppcheck.cmake` y la detección de `DEVKIT_IS_TOP_LEVEL` |
+| `find_package(fmt REQUIRED)` falla al consumir `devkit` vía `FetchContent` sin Conan | `devkit` asumía que `fmt` ya estaba instalado externamente | Ya mitigado: `devkit` comprueba `if(NOT TARGET fmt::fmt)` y lo trae vía `FetchContent` si hace falta (ver sección 7.2) |
+| `undefined reference to __asan_*`/`__ubsan_*` al enlazar un ejecutable que consume `devkit::shapes` vía `FetchContent` | Los flags de sanitizer de `devkit_shapes` (biblioteca estática) no se propagaban al consumidor | Ya mitigado: `cmake/Sanitizers.cmake` declara los flags como `PUBLIC`. Si aun así falla, instala el runtime (`libasan`/`libubsan`) en el sistema del consumidor, o compílalo en Release (ver sección 7.2) |
+| `-DBUILD_SHARED_LIBS=ON` no tiene efecto, `devkit_shapes` sigue compilando estático | `add_library(devkit_shapes STATIC ...)` con el tipo fijado explícitamente ignora `BUILD_SHARED_LIBS` | Ya corregido: `add_library(devkit_shapes ...)` sin `STATIC`/`SHARED` explícito (ver sección 6.12) |
+| Al pasar `-o shared=True` a `conan install`, sale el warning `Unscoped option definition is ambiguous` | Conan 2 no sabe si la opción aplica solo a `devkit` o también a sus dependencias (`fmt`, `gtest`) | Usa `-o "&:shared=True"` (scope explícito al paquete raíz) — ya aplicado en `scripts/configure.sh` al usar el tercer argumento `shared` |
+| Símbolos de una clase/función pública ausentes en `libdevkit_shapes.so` (`nm -D` no la muestra) | Falta el macro `DEVKIT_API` en esa clase/función — `CMAKE_CXX_VISIBILITY_PRESET=hidden` la oculta por defecto | Añade `#include "devkit/export.h"` y marca la clase/función con `DEVKIT_API` (ver sección 6.12) |
 
 ---
 
@@ -615,6 +718,9 @@ docker-compose -f docker/docker-compose.yml exec dev-env bash
 
 # Debug forzando compilador
 rm -rf temp/build && ./scripts/configure.sh debug clang
+
+# Debug como biblioteca compartida (.so)
+rm -rf temp/build && ./scripts/configure.sh debug default shared
 
 # Release
 ./scripts/configure.sh release && cmake --build --preset release && ctest --build-config Release --test-dir temp/build/release --output-on-failure

@@ -44,6 +44,7 @@ class DevkitConan(ConanFile):
 
     def build_requirements(self):
         self.test_requires("gtest/1.15.0")
+        self.test_requires("benchmark/1.9.0")
 
     def generate(self):
         tc = CMakeToolchain(self)
