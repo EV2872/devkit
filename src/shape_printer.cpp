@@ -1,10 +1,11 @@
 // Ruta: devkit/src/shape_printer.cpp
 
-#include "devkit/shape.hpp"
 #include "devkit/shape_printer.hpp"
 #include <string>
 
 #include <fmt/core.h>
+
+#include "devkit/shape.hpp"
 
 namespace devkit {
 

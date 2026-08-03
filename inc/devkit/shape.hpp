@@ -1,15 +1,15 @@
 #ifndef SHAPE_HPP
 #define SHAPE_HPP
 
-#include "devkit/export.h"
-
 #include <string>
+
+#include "devkit/export.h"
 
 namespace devkit {
 
 // Interfaz base de una figura geométrica. Ejemplo mínimo para la plantilla.
 class DEVKIT_API Shape {
-   public:
+  public:
     Shape() = default;
     virtual ~Shape() = default;
 

@@ -49,7 +49,7 @@ jobs:
 
       - name: Check formatting
         run: |
-          docker run --rm -v ${{ github.workspace }}:/home/dev/project \
+          docker run --rm --user root -v ${{ github.workspace }}:/home/dev/project \
             ${{ env.IMAGE_NAME }} bash -c '
               find inc src app test -name "*.hpp" -o -name "*.cpp" | \
               xargs clang-format --dry-run --Werror
@@ -73,7 +73,7 @@ jobs:
 
       - name: Configure, build and test (${{ matrix.compiler }})
         run: |
-          docker run --rm -v ${{ github.workspace }}:/home/dev/project \
+          docker run --rm --user root -v ${{ github.workspace }}:/home/dev/project \
             ${{ env.IMAGE_NAME }} bash -c '
               ./scripts/configure.sh debug ${{ matrix.compiler }} &&
               cmake --build --preset debug &&
@@ -102,7 +102,7 @@ jobs:
 
       - name: Configure and run cppcheck
         run: |
-          docker run --rm -v ${{ github.workspace }}:/home/dev/project \
+          docker run --rm --user root -v ${{ github.workspace }}:/home/dev/project \
             ${{ env.IMAGE_NAME }} bash -c '
               ./scripts/configure.sh debug &&
               cmake --build temp/build/debug --target cppcheck
@@ -122,7 +122,7 @@ jobs:
 
       - name: Configure, build and test
         run: |
-          docker run --rm -v ${{ github.workspace }}:/home/dev/project \
+          docker run --rm --user root -v ${{ github.workspace }}:/home/dev/project \
             ${{ env.IMAGE_NAME }} bash -c '
               ./scripts/configure.sh release &&
               cmake --build --preset release &&
@@ -150,7 +150,7 @@ jobs:
 
       - name: Configure, build, test and generate coverage
         run: |
-          docker run --rm -v ${{ github.workspace }}:/home/dev/project \
+          docker run --rm --user root -v ${{ github.workspace }}:/home/dev/project \
             ${{ env.IMAGE_NAME }} bash -c '
               ./scripts/configure.sh coverage &&
               cmake --build temp/build/coverage &&
@@ -179,7 +179,7 @@ jobs:
 
       - name: Configure, build and run memcheck
         run: |
-          docker run --rm -v ${{ github.workspace }}:/home/dev/project \
+          docker run --rm --user root -v ${{ github.workspace }}:/home/dev/project \
             ${{ env.IMAGE_NAME }} bash -c '
               ./scripts/configure.sh valgrind &&
               cmake --build temp/build/valgrind &&
@@ -200,7 +200,7 @@ jobs:
 
       - name: Generate documentation
         run: |
-          docker run --rm -v ${{ github.workspace }}:/home/dev/project \
+          docker run --rm --user root -v ${{ github.workspace }}:/home/dev/project \
             ${{ env.IMAGE_NAME }} bash -c '
               ./scripts/configure.sh debug &&
               cmake --preset debug -DDEVKIT_BUILD_DOCS=ON &&
@@ -228,7 +228,7 @@ jobs:
 
       - name: conan create
         run: |
-          docker run --rm -v ${{ github.workspace }}:/home/dev/project \
+          docker run --rm --user root -v ${{ github.workspace }}:/home/dev/project \
             ${{ env.IMAGE_NAME }} bash -c '
               conan create . --build=missing
             '

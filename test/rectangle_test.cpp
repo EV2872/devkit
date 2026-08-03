@@ -18,8 +18,8 @@ TEST(RectangleTest, NameReturnsRectangle) {
 }
 
 // Test parametrizado — buena práctica para evitar duplicar TESTs casi idénticos
-class RectangleAreaParamTest
-    : public ::testing::TestWithParam<std::tuple<double, double, double>> {};
+class RectangleAreaParamTest : public ::testing::TestWithParam<std::tuple<double, double, double>> {
+};
 
 TEST_P(RectangleAreaParamTest, ComputesExpectedArea) {
     const auto [width, height, expected_area] = GetParam();
@@ -28,15 +28,11 @@ TEST_P(RectangleAreaParamTest, ComputesExpectedArea) {
     EXPECT_DOUBLE_EQ(kRectangle.Area(), expected_area);
 }
 
-INSTANTIATE_TEST_SUITE_P(
-    VariousDimensions,
-    RectangleAreaParamTest,
-    ::testing::Values(
-        std::make_tuple(1.0, 1.0, 1.0),
-        std::make_tuple(2.0, 5.0, 10.0),
-        std::make_tuple(0.0, 5.0, 0.0)
-    )
-);
+INSTANTIATE_TEST_SUITE_P(VariousDimensions,
+                         RectangleAreaParamTest,
+                         ::testing::Values(std::make_tuple(1.0, 1.0, 1.0),
+                                           std::make_tuple(2.0, 5.0, 10.0),
+                                           std::make_tuple(0.0, 5.0, 0.0)));
 
 }  // namespace
 }  // namespace devkit::test

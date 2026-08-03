@@ -1,9 +1,9 @@
 #ifndef SHAPE_PRINTER_HPP
 #define SHAPE_PRINTER_HPP
 
-#include "devkit/export.h"
-
 #include <string>
+
+#include "devkit/export.h"
 
 #include "shape.hpp"
 

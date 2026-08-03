@@ -1,8 +1,7 @@
 #include "devkit/circle.hpp"
+#include <numbers>
 
 #include <gtest/gtest.h>
-
-#include <numbers>
 
 namespace devkit::test {
 namespace {

@@ -1,21 +1,22 @@
 #ifndef CIRCLE_HPP
 #define CIRCLE_HPP
 
+#include <string>
+
 #include "devkit/export.h"
 
-#include <string>
 #include "shape.hpp"
 
 namespace devkit {
 
 class DEVKIT_API Circle final : public Shape {
-   public:
+  public:
     explicit Circle(double radius);
 
     [[nodiscard]] double Area() const override;
     [[nodiscard]] std::string Name() const override;
 
-   private:
+  private:
     double radius_;
 };
 

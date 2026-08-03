@@ -1,5 +1,4 @@
 #include "devkit/circle.hpp"
-
 #include <numbers>
 #include <string>
 
