@@ -19,7 +19,7 @@ jobs:
 
       - name: Configure, build and test (Release)
         run: |
-          docker run --rm -v ${{ github.workspace }}:/home/dev/project \
+          docker run --rm --user root -v ${{ github.workspace }}:/home/dev/project \
             ${{ env.IMAGE_NAME }} bash -c '
               ./scripts/configure.sh release &&
               cmake --build --preset release &&
