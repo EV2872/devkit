@@ -15,3 +15,6 @@ CXX=clang++
 tools.build:compiler_executables={"c": "clang", "cpp": "clang++"}
 tools.cmake.cmaketoolchain:generator=Ninja
 tools.build:jobs=0
+# ignorar c2y warnings por culpa de google-benchmark
+tools.build:cxxflags=["-Wno-c2y-extensions", "-Wno-unknown-warning-option"]
+tools.build:cflags=["-Wno-c2y-extensions", "-Wno-unknown-warning-option"]
