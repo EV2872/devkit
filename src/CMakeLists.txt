@@ -6,6 +6,10 @@ add_library(devkit_shapes
 
 add_library(devkit::shapes ALIAS devkit_shapes)
 
+# por separado para evitar simbolos duplicados en el linker y que un tercer usuario pueda utilizar el main que quiera
+add_library(devkit_shapes_main STATIC devkit_main.cpp)
+add_library(devkit::shapes_main ALIAS devkit_shapes_main)
+target_link_libraries(devkit_shapes_main PUBLIC devkit_shapes)
 
 # ==============================================================================
 # Genera inc/devkit/export.h automáticamente, con el macro DEVKIT_API que
@@ -35,5 +39,6 @@ target_link_libraries(devkit_shapes
 )
 
 # Aplica warnings, sanitizers, optimizaciones y análisis estático
-# SOLO a este target (nuestro código), nunca a fmt ni a gtest.
+# SOLO a estos target (nuestro código), nunca a fmt ni a gtest.
 devkit_configure_target(devkit_shapes)
+devkit_configure_target(devkit_shapes_main)

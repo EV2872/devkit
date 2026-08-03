@@ -1,4 +1,6 @@
-# Profesional C++ Template
+# Profesional C++ Template (STILL IN PROGRESS)
+
+## WAIT UNTIL VERSION 1.0.0 (ALREADY PUBLIC FOR THE GITHUB ACTIONS)
 
 Configure a C++ project is basically a TORTURE for new users, specially the fact that nowadays every profesional project regardless of the lenguaje uses a bunch of tools delevoped by different people, making it harder to synchronize, find what you need in their documentation... This template might be a overkill for people learning C++ or that they know it but at the same time not really familiarized with the ecosystem that surounds it, firstly I recommend getting familiarized with some of the tools before combining all of them, specially the compiler's options, CMake, Conan and Docker. At the same time I want to state that this template doesnt need to be the perfect template but a set of good practices to make your code reproducible everywhere, let other projects/people to use your library. Feel free to do whatever the MIT lincense allows you to do.
 

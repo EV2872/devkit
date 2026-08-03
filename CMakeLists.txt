@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.25)
 
 project(devkit
-    VERSION 0.4.0
+    VERSION 0.4.1
     DESCRIPTION "Plantilla profesional de proyecto C++"
     LANGUAGES CXX
 )
@@ -77,6 +77,7 @@ option(DEVKIT_BUILD_TESTS "Compilar los tests" ${DEVKIT_IS_TOP_LEVEL})
 option(DEVKIT_BUILD_APP "Compilar el ejecutable devkit_app" ${DEVKIT_IS_TOP_LEVEL})
 option(DEVKIT_BUILD_BENCHMARKS "Compilar los benchmarks" OFF)
 option(DEVKIT_BUILD_FUZZERS "Compilar los fuzz targets (requiere Clang)" OFF)
+option(DEVKIT_BUILD_INJECTION_TEST "Compilar test de inyección de main" OFF)
 
 add_subdirectory(src)
 
@@ -97,6 +98,10 @@ if(DEVKIT_BUILD_FUZZERS)
     add_subdirectory(fuzz)
 endif()
 
+if(DEVKIT_BUILD_INJECTION_TEST)
+    add_subdirectory(main_injection)
+endif()
+
 devkit_register_coverage_target()
 devkit_register_valgrind_target()
 devkit_register_cppcheck_target()
@@ -108,7 +113,7 @@ devkit_register_cppcheck_target()
 # ==============================================================================
 include(GNUInstallDirs)
 
-install(TARGETS devkit_shapes
+install(TARGETS devkit_shapes devkit_shapes_main
     EXPORT devkitTargets
     LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
     ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
