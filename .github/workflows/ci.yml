@@ -14,20 +14,14 @@ env:
   IMAGE_NAME: devkit-fedora-env
 
 jobs:
-  # ============================================================================
-  # Construye la imagen Docker una única vez y la reutiliza en todos los jobs
-  # ============================================================================
   build-image:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
       - name: Build dev image
         run: docker compose -f docker/docker-compose.yml build dev-env
-
       - name: Save image
         run: docker save ${{ env.IMAGE_NAME }} -o /tmp/devkit-image.tar
-
       - name: Upload image artifact
         uses: actions/upload-artifact@v4
         with:
@@ -35,9 +29,6 @@ jobs:
           path: /tmp/devkit-image.tar
           retention-days: 1
 
-  # ============================================================================
-  # Formato: falla si algún fichero no cumple .clang-format
-  # ============================================================================
   format-check:
     needs: build-image
     runs-on: ubuntu-latest
@@ -46,7 +37,6 @@ jobs:
       - uses: actions/download-artifact@v4
         with: { name: devkit-image, path: /tmp }
       - run: docker load -i /tmp/devkit-image.tar
-
       - name: Check formatting
         run: |
           docker run --rm --user root -v ${{ github.workspace }}:/home/dev/project \
@@ -55,9 +45,6 @@ jobs:
               xargs clang-format --dry-run --Werror
             '
 
-  # ============================================================================
-  # Build + test en Debug, con sanitizers y clang-tidy activos
-  # ============================================================================
   build-and-test-debug:
     needs: build-image
     runs-on: ubuntu-latest
@@ -67,13 +54,26 @@ jobs:
         compiler: [gcc, clang]
     steps:
       - uses: actions/checkout@v4
+
+      # 1. EL CACHÉ VA ANTES DE COMPILAR
+      - name: Cache Conan packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.conan2/p
+          key: conan-${{ runner.os }}-${{ matrix.compiler }}-${{ hashFiles('conanfile.py') }}
+          restore-keys: |
+            conan-${{ runner.os }}-${{ matrix.compiler }}-
+
       - uses: actions/download-artifact@v4
         with: { name: devkit-image, path: /tmp }
       - run: docker load -i /tmp/devkit-image.tar
 
+      # 2. MONTAMOS EL VOLUMEN DE CONAN (-v ~/.conan2:/root/.conan2)
       - name: Configure, build and test (${{ matrix.compiler }})
         run: |
-          docker run --rm --user root -v ${{ github.workspace }}:/home/dev/project \
+          docker run --rm --user root \
+            -v ${{ github.workspace }}:/home/dev/project \
+            -v ~/.conan2:/root/.conan2 \
             ${{ env.IMAGE_NAME }} bash -c '
               ./scripts/configure.sh debug ${{ matrix.compiler }} &&
               cmake --build --preset debug &&
@@ -88,69 +88,77 @@ jobs:
           path: temp/build/debug/Testing/
           retention-days: 7
 
-  # ============================================================================
-  # Cppcheck (target independiente, ver cmake/Cppcheck.cmake)
-  # ============================================================================
   cppcheck:
     needs: build-image
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Cache Conan packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.conan2/p
+          key: conan-${{ runner.os }}-gcc-${{ hashFiles('conanfile.py') }}
+
       - uses: actions/download-artifact@v4
         with: { name: devkit-image, path: /tmp }
       - run: docker load -i /tmp/devkit-image.tar
 
       - name: Configure and run cppcheck
         run: |
-          docker run --rm --user root -v ${{ github.workspace }}:/home/dev/project \
+          docker run --rm --user root \
+            -v ${{ github.workspace }}:/home/dev/project \
+            -v ~/.conan2:/root/.conan2 \
             ${{ env.IMAGE_NAME }} bash -c '
               ./scripts/configure.sh debug &&
               cmake --build temp/build/debug --target cppcheck
             '
 
-  # ============================================================================
-  # Build + test en Release
-  # ============================================================================
   build-and-test-release:
     needs: build-image
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Cache Conan packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.conan2/p
+          key: conan-${{ runner.os }}-gcc-release-${{ hashFiles('conanfile.py') }}
+
       - uses: actions/download-artifact@v4
         with: { name: devkit-image, path: /tmp }
       - run: docker load -i /tmp/devkit-image.tar
 
       - name: Configure, build and test
         run: |
-          docker run --rm --user root -v ${{ github.workspace }}:/home/dev/project \
+          docker run --rm --user root \
+            -v ${{ github.workspace }}:/home/dev/project \
+            -v ~/.conan2:/root/.conan2 \
             ${{ env.IMAGE_NAME }} bash -c '
               ./scripts/configure.sh release &&
               cmake --build --preset release &&
               ctest --build-config Release --test-dir temp/build/release --output-on-failure
             '
 
-      - name: Upload release binaries
-        uses: actions/upload-artifact@v4
-        with:
-          name: release-binaries
-          path: bin/release/
-          retention-days: 7
-
-  # ============================================================================
-  # Coverage con gcovr, publicado como artefacto HTML navegable
-  # ============================================================================
   coverage:
     needs: build-image
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Cache Conan packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.conan2/p
+          key: conan-${{ runner.os }}-gcc-cov-${{ hashFiles('conanfile.py') }}
+
       - uses: actions/download-artifact@v4
         with: { name: devkit-image, path: /tmp }
       - run: docker load -i /tmp/devkit-image.tar
 
       - name: Configure, build, test and generate coverage
         run: |
-          docker run --rm --user root -v ${{ github.workspace }}:/home/dev/project \
+          docker run --rm --user root \
+            -v ${{ github.workspace }}:/home/dev/project \
+            -v ~/.conan2:/root/.conan2 \
             ${{ env.IMAGE_NAME }} bash -c '
               ./scripts/configure.sh coverage &&
               cmake --build temp/build/coverage &&
@@ -158,102 +166,89 @@ jobs:
               cmake --build temp/build/coverage --target coverage
             '
 
-      - name: Upload coverage report
-        uses: actions/upload-artifact@v4
-        with:
-          name: coverage-report
-          path: coverage/
-          retention-days: 30
-
-  # ============================================================================
-  # Valgrind memcheck (job separado, más lento — nunca junto a sanitizers)
-  # ============================================================================
   valgrind:
     needs: build-image
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Cache Conan packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.conan2/p
+          key: conan-${{ runner.os }}-gcc-val-${{ hashFiles('conanfile.py') }}
+
       - uses: actions/download-artifact@v4
         with: { name: devkit-image, path: /tmp }
       - run: docker load -i /tmp/devkit-image.tar
 
       - name: Configure, build and run memcheck
         run: |
-          docker run --rm --user root -v ${{ github.workspace }}:/home/dev/project \
+          docker run --rm --user root \
+            -v ${{ github.workspace }}:/home/dev/project \
+            -v ~/.conan2:/root/.conan2 \
             ${{ env.IMAGE_NAME }} bash -c '
               ./scripts/configure.sh valgrind &&
               cmake --build temp/build/valgrind &&
               cmake --build temp/build/valgrind --target memcheck
             '
 
-  # ============================================================================
-  # Documentación con Doxygen, publicada como artefacto navegable
-  # ============================================================================
   docs:
     needs: build-image
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Cache Conan packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.conan2/p
+          key: conan-${{ runner.os }}-gcc-docs-${{ hashFiles('conanfile.py') }}
+
       - uses: actions/download-artifact@v4
         with: { name: devkit-image, path: /tmp }
       - run: docker load -i /tmp/devkit-image.tar
 
       - name: Generate documentation
         run: |
-          docker run --rm --user root -v ${{ github.workspace }}:/home/dev/project \
+          docker run --rm --user root \
+            -v ${{ github.workspace }}:/home/dev/project \
+            -v ~/.conan2:/root/.conan2 \
             ${{ env.IMAGE_NAME }} bash -c '
               ./scripts/configure.sh debug &&
               cmake --preset debug -DDEVKIT_BUILD_DOCS=ON &&
               cmake --build temp/build/debug --target docs
             '
 
-      - name: Upload docs
-        uses: actions/upload-artifact@v4
-        with:
-          name: doxygen-docs
-          path: docs/html/
-          retention-days: 30
-
-  # ============================================================================
-  # Paquete Conan: valida que `conan create` + test_package funcionan
-  # ============================================================================
   conan-package:
     needs: build-image
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Cache Conan packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.conan2/p
+          key: conan-${{ runner.os }}-package-${{ hashFiles('conanfile.py') }}
+
       - uses: actions/download-artifact@v4
         with: { name: devkit-image, path: /tmp }
       - run: docker load -i /tmp/devkit-image.tar
 
       - name: conan create
         run: |
-          docker run --rm --user root -v ${{ github.workspace }}:/home/dev/project \
+          docker run --rm --user root \
+            -v ${{ github.workspace }}:/home/dev/project \
+            -v ~/.conan2:/root/.conan2 \
             ${{ env.IMAGE_NAME }} bash -c '
               conan create . --build=missing
             '
 
-  # ============================================================================
-  # Gate final: resume el estado de todos los jobs anteriores para branch
-  # protection (basta con requerir este único job como "required check")
-  # ============================================================================
   ci-success:
     if: always()
-    needs:
-      - format-check
-      - build-and-test-debug
-      - cppcheck
-      - build-and-test-release
-      - coverage
-      - valgrind
-      - docs
-      - conan-package
+    needs: [format-check, build-and-test-debug, cppcheck, build-and-test-release, coverage, valgrind, docs, conan-package]
     runs-on: ubuntu-latest
     steps:
       - name: Check all jobs succeeded
         run: |
           if [[ "${{ contains(needs.*.result, 'failure') }}" == "true" ]]; then
-            echo "Al menos un job ha fallado"
             exit 1
           fi
-          echo "Todos los jobs han pasado correctamente"
