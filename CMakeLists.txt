@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.25)
 
 project(devkit
-    VERSION 0.3.0
+    VERSION 0.4.0
     DESCRIPTION "Plantilla profesional de proyecto C++"
     LANGUAGES CXX
 )
@@ -35,6 +35,7 @@ include(Optimizations)
 include(Coverage)
 include(Documentation)
 include(Valgrind)
+include(Fuzzing)
 include(Devkit)
 include(Version)
 
@@ -75,6 +76,7 @@ endif()
 option(DEVKIT_BUILD_TESTS "Compilar los tests" ${DEVKIT_IS_TOP_LEVEL})
 option(DEVKIT_BUILD_APP "Compilar el ejecutable devkit_app" ${DEVKIT_IS_TOP_LEVEL})
 option(DEVKIT_BUILD_BENCHMARKS "Compilar los benchmarks" OFF)
+option(DEVKIT_BUILD_FUZZERS "Compilar los fuzz targets (requiere Clang)" OFF)
 
 add_subdirectory(src)
 
@@ -89,6 +91,10 @@ endif()
 
 if(DEVKIT_BUILD_BENCHMARKS)
     add_subdirectory(benchmark)
+endif()
+
+if(DEVKIT_BUILD_FUZZERS)
+    add_subdirectory(fuzz)
 endif()
 
 devkit_register_coverage_target()

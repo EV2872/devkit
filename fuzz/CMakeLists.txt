@@ -1,0 +1,1 @@
+devkit_add_fuzzer(fuzz_shape_printer shape_printer_fuzz.cpp)

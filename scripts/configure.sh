@@ -45,7 +45,8 @@ if [[ "${COMPILER}" != "default" ]]; then
         echo "❌ Compilador desconocido: '${COMPILER}'. Usa 'default', 'gcc' o 'clang'." >&2
         exit 1
     fi
-    CONAN_PROFILE_ARGS=(-pr:h="${PROFILE_NAME}")
+    #CONAN_PROFILE_ARGS=(-pr:h="${PROFILE_NAME}")
+    CONAN_PROFILE_ARGS=(-pr:h="conan/profiles/${PROFILE_NAME}")
     echo "==> Forzando perfil de compilador: ${PROFILE_NAME}"
 fi
 
