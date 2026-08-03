@@ -4,7 +4,7 @@ from conan.tools.cmake import CMake, CMakeDeps, CMakeToolchain, cmake_layout
 
 class DevkitConan(ConanFile):
     name = "devkit"
-    version = "0.4.1"
+    version = "0.4.2"
     license = "MIT"
     url = "https://github.com/tu-usuario/devkit"
     description = "Librería de ejemplo de figuras geométricas (Circle, Rectangle) sobre fmt."
@@ -61,13 +61,21 @@ class DevkitConan(ConanFile):
                 "DEVKIT_BUILD_APP": "OFF",
             },
         )
-        cmake.build(target="devkit_shapes")
+        #cmake.build(target="devkit_shapes")
+        cmake.build()
 
     def package(self):
         cmake = CMake(self)
         cmake.install()
 
     def package_info(self):
-        self.cpp_info.libs = ["devkit_shapes"]
-        self.cpp_info.set_property("cmake_target_name", "devkit::shapes")
-        self.cpp_info.set_property("cmake_file_name", "devkit")
+        #self.cpp_info.libs = ["devkit_shapes"]
+        #self.cpp_info.set_property("cmake_target_name", "devkit::shapes")
+        #self.cpp_info.set_property("cmake_file_name", "devkit")
+        # Componente principal (Lógica)
+        self.cpp_info.components["shapes"].libs = ["devkit_shapes"]
+        self.cpp_info.components["shapes"].requires = ["fmt::fmt"]
+
+        # Componente del Main
+        self.cpp_info.components["shapes_main"].libs = ["devkit_shapes_main"]
+        self.cpp_info.components["shapes_main"].requires = ["shapes"]
