@@ -1,0 +1,67 @@
+# ==============================================================================
+# Doxyfile.in — Template para Doxygen, configurado por CMake vía configure_file
+# ==============================================================================
+
+PROJECT_NAME           = "@PROJECT_NAME@"
+PROJECT_NUMBER         = "@PROJECT_VERSION@"
+PROJECT_BRIEF          = "@PROJECT_DESCRIPTION@"
+
+OUTPUT_DIRECTORY       = @PROJECT_SOURCE_DIR@/docs
+
+INPUT                  = @DEVKIT_DOXYGEN_INPUT@
+RECURSIVE              = YES
+FILE_PATTERNS          = *.hpp *.h *.cpp
+
+# ------------------------------------------------------------------------------
+# Solo documentamos nuestro propio código — nunca dependencias de Conan
+# ------------------------------------------------------------------------------
+EXCLUDE_PATTERNS        = */test/* */temp/* */bin/*
+EXCLUDE_SYMBOLS          =
+
+# ------------------------------------------------------------------------------
+# Extracción
+# ------------------------------------------------------------------------------
+EXTRACT_ALL             = NO
+EXTRACT_PRIVATE         = NO
+EXTRACT_STATIC          = NO
+HIDE_UNDOC_MEMBERS      = NO
+HIDE_UNDOC_CLASSES      = NO
+
+# ------------------------------------------------------------------------------
+# Salida
+# ------------------------------------------------------------------------------
+GENERATE_HTML           = YES
+GENERATE_LATEX          = NO
+GENERATE_XML            = NO
+
+HTML_OUTPUT             = html
+
+# ------------------------------------------------------------------------------
+# Diagramas (usa graphviz/dot, ya instalado en el Dockerfile)
+# ------------------------------------------------------------------------------
+HAVE_DOT                = YES
+DOT_IMAGE_FORMAT        = svg
+CLASS_DIAGRAMS          = YES
+CLASS_GRAPH             = YES
+COLLABORATION_GRAPH     = YES
+INCLUDE_GRAPH           = YES
+INCLUDED_BY_GRAPH       = YES
+CALL_GRAPH              = NO
+CALLER_GRAPH            = NO
+
+# ------------------------------------------------------------------------------
+# Warnings — tratamos huecos de documentación como señal de calidad, no error
+# ------------------------------------------------------------------------------
+WARNINGS                = YES
+WARN_IF_UNDOCUMENTED    = YES
+WARN_IF_DOC_ERROR       = YES
+WARN_NO_PARAMDOC        = YES
+WARN_AS_ERROR           = NO
+
+QUIET                   = NO
+
+# ------------------------------------------------------------------------------
+# C++ moderno
+# ------------------------------------------------------------------------------
+OPTIMIZE_OUTPUT_FOR_C   = NO
+BUILTIN_STL_SUPPORT     = YES
