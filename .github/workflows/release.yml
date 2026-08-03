@@ -1,0 +1,40 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+env:
+  IMAGE_NAME: devkit-fedora-env
+
+jobs:
+  build-release-binaries:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build dev image
+        run: docker compose -f docker/docker-compose.yml build dev-env
+
+      - name: Configure, build and test (Release)
+        run: |
+          docker run --rm -v ${{ github.workspace }}:/home/dev/project \
+            ${{ env.IMAGE_NAME }} bash -c '
+              ./scripts/configure.sh release &&
+              cmake --build --preset release &&
+              ctest --build-config Release --test-dir temp/build/release --output-on-failure
+            '
+
+      - name: Package binaries
+        run: |
+          mkdir -p release-artifacts
+          tar -czf release-artifacts/devkit-${{ github.ref_name }}-linux-x86_64.tar.gz \
+            -C bin/release .
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release-artifacts/*.tar.gz
+          generate_release_notes: true
+          body_path: CHANGELOG.md

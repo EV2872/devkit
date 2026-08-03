@@ -61,17 +61,21 @@ jobs:
   build-and-test-debug:
     needs: build-image
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        compiler: [gcc, clang]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with: { name: devkit-image, path: /tmp }
       - run: docker load -i /tmp/devkit-image.tar
 
-      - name: Configure, build and test
+      - name: Configure, build and test (${{ matrix.compiler }})
         run: |
           docker run --rm -v ${{ github.workspace }}:/home/dev/project \
             ${{ env.IMAGE_NAME }} bash -c '
-              ./scripts/configure.sh debug &&
+              ./scripts/configure.sh debug ${{ matrix.compiler }} &&
               cmake --build --preset debug &&
               ctest --preset debug --output-on-failure
             '
@@ -80,7 +84,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: test-results-debug
+          name: test-results-debug-${{ matrix.compiler }}
           path: temp/build/debug/Testing/
           retention-days: 7
 

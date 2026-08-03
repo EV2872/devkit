@@ -64,11 +64,12 @@ devkit/
 ├── src/             # Implementación (.cpp) de la librería devkit_shapes
 ├── app/             # Driver ejecutable (main.cpp), consume la librería
 ├── test/            # Tests (GoogleTest + GoogleMock)
+├── benchmark/       # Microbenchmarks (Google Benchmark), bajo demanda
 ├── test_package/    # Validación del paquete Conan (conan create)
 ├── version/          # Template version.h.in
 ├── docs/            # Salida de Doxygen (generado, no versionado)
 ├── coverage/        # Salida de gcovr (generado, no versionado)
-├── bin/             # Binarios (debug/, release/, test/) (generado, no versionado)
+├── bin/             # Binarios (debug/, release/, test/, benchmark/) (generado, no versionado)
 ├── temp/            # Artefactos de build (generado, no versionado)
 ├── scripts/         # Scripts auxiliares (configure.sh, release.sh)
 ├── .github/          # GitHub Actions (CI)
@@ -166,6 +167,34 @@ find inc src app test -name "*.hpp" -o -name "*.cpp" | xargs clang-format -i
 cmake --preset debug -DENABLE_IWYU=ON
 cmake --build --preset debug
 ```
+
+### 4.9. Benchmarks (Google Benchmark)
+
+Microbenchmarks de la librería (`benchmark/`), desactivados por defecto (a diferencia de tests/app) porque son pesados de compilar y no aportan valor en el ciclo normal de desarrollo. Se activan explícitamente con `-DDEVKIT_BUILD_BENCHMARKS=ON`:
+
+```bash
+./scripts/configure.sh debug
+cmake --preset debug -DDEVKIT_BUILD_BENCHMARKS=ON
+cmake --build --preset debug
+./bin/benchmark/devkit_benchmarks
+```
+
+**Los benchmarks deben medirse en Release, nunca en Debug** — con sanitizers/optimizaciones desactivadas, los tiempos no son representativos (Google Benchmark incluso avisa con `***WARNING*** Library was built as DEBUG. Timings may be affected.` si detecta esto):
+
+```bash
+./scripts/configure.sh release
+cmake --preset release -DDEVKIT_BUILD_BENCHMARKS=ON
+cmake --build --preset release
+./bin/benchmark/devkit_benchmarks
+```
+
+Filtrar por nombre (igual que con gtest):
+
+```bash
+./bin/benchmark/devkit_benchmarks --benchmark_filter=Circle
+```
+
+Ver sección 6.13 para añadir nuevos benchmarks.
 
 ---
 
@@ -294,7 +323,7 @@ cmake --preset debug -DENABLE_THREAD_SANITIZER=ON
        self.requires("nlohmann_json/3.11.3")   # <-- nueva dependencia
    ```
 
-   Si es una dependencia **solo para tests** (no para producción), va en `build_requirements()` con `self.test_requires(...)` en vez de `requirements()`.
+   Si es una dependencia **solo para tests/benchmarks** (no para producción), va en `build_requirements()` con `self.test_requires(...)` en vez de `requirements()` — así se hizo con `gtest` y `benchmark`.
 
 3. Si el paquete tiene opciones relevantes (por ejemplo `shared`), añádelas en `configure()`:
 
@@ -414,7 +443,7 @@ cmake --build --preset debug
 
 ### 6.11. Al editar cualquier fichero de `cmake/*.cmake`: usa `PROJECT_SOURCE_DIR`, no `CMAKE_SOURCE_DIR`
 
-Todos los módulos propios de `devkit` (`cmake/*.cmake`, `src/CMakeLists.txt`, `app/CMakeLists.txt`, `test/CMakeLists.txt`, el `CMakeLists.txt` raíz) referencian rutas de `devkit` usando `PROJECT_SOURCE_DIR`/`PROJECT_BINARY_DIR`, **no** `CMAKE_SOURCE_DIR`/`CMAKE_BINARY_DIR`. Es una regla deliberada, no un detalle de estilo:
+Todos los módulos propios de `devkit` (`cmake/*.cmake`, `src/CMakeLists.txt`, `app/CMakeLists.txt`, `test/CMakeLists.txt`, `benchmark/CMakeLists.txt`, el `CMakeLists.txt` raíz) referencian rutas de `devkit` usando `PROJECT_SOURCE_DIR`/`PROJECT_BINARY_DIR`, **no** `CMAKE_SOURCE_DIR`/`CMAKE_BINARY_DIR`. Es una regla deliberada, no un detalle de estilo:
 
 - `CMAKE_SOURCE_DIR` es **global**: siempre apunta al proyecto top-level real, sea `devkit` o quien lo esté consumiendo (por ejemplo, vía `FetchContent`).
 - `PROJECT_SOURCE_DIR` es **relativo al último `project()` evaluado**: dentro de `devkit/CMakeLists.txt`, siempre apunta a la raíz de `devkit`, esté embebido o no.
@@ -456,6 +485,48 @@ class DEVKIT_API Circle final : public Shape { ... };
 - Compilando como `.a` (estático, el caso por defecto) → el macro no hace nada.
 
 Si añades una nueva clase/función pública a la librería, recuerda marcarla con `DEVKIT_API` (ver sección 6.6) — si no, quedará oculta en modo compartido aunque funcione perfectamente en modo estático (el bug pasaría desapercibido hasta que alguien active `shared`).
+
+### 6.13. Añadir nuevos benchmarks
+
+1. Crea `benchmark/nuevo_benchmark.cpp` siguiendo el patrón de los existentes — **sin** `BENCHMARK_MAIN()`, ver nota abajo:
+
+   ```cpp
+   #include <benchmark/benchmark.h>
+
+   #include "devkit/nuevo.hpp"
+
+   namespace {
+
+   void BM_NuevoOperacion(benchmark::State& state) {
+       for (auto _ : state) {
+           benchmark::DoNotOptimize(/* operación a medir */);
+       }
+   }
+   BENCHMARK(BM_NuevoOperacion);
+
+   }  // namespace
+   ```
+
+2. Añádelo a `benchmark/CMakeLists.txt`:
+
+   ```cmake
+   add_executable(devkit_benchmarks
+       circle_benchmark.cpp
+       rectangle_benchmark.cpp
+       nuevo_benchmark.cpp   # <-- añadir
+   )
+   ```
+
+3. Recompila con benchmarks activados (ver sección 4.9):
+
+   ```bash
+   cmake --preset debug -DDEVKIT_BUILD_BENCHMARKS=ON
+   cmake --build --preset debug
+   ```
+
+> **El `main()` no se escribe a mano ni con la macro `BENCHMARK_MAIN()` en ningún `.cpp`.** `benchmark/CMakeLists.txt` enlaza el target `benchmark::benchmark_main` (además de `benchmark::benchmark`), que ya provee un `main()` completo — exactamente el mismo patrón que `GTest::gtest_main` en `test/CMakeLists.txt`. Si además se usara `BENCHMARK_MAIN()` en algún `.cpp`, habría dos definiciones de `main()` y el enlazado fallaría.
+>
+> Si defines `RUNTIME_OUTPUT_DIRECTORY` u otra propiedad de salida por-target, fíjala también por-configuración (`RUNTIME_OUTPUT_DIRECTORY_DEBUG`, `_RELEASE`, etc. — ver `benchmark/CMakeLists.txt`) — las propiedades específicas de configuración, ya inicializadas por las variables globales del `CMakeLists.txt` raíz, tienen prioridad sobre la genérica y la sobreescriben silenciosamente si no se fija también la versión específica (ver tabla de la sección 10).
 
 ---
 
@@ -551,7 +622,7 @@ target_link_libraries(mi_app PRIVATE devkit::shapes)
 
 ### 7.4. Paquete Conan (`conan create` + `test_package`)
 
-`devkit/conanfile.py` es una receta **dual**: sirve tanto para instalar tus propias dependencias (`fmt`, `gtest`) durante el desarrollo local, como para empaquetar `devkit_shapes` como un paquete Conan consumible por terceros. La distinción se resuelve automáticamente vía el flag `-c user.devkit:local_dev=True` que `scripts/configure.sh` ya pasa por ti — no hace falta que lo gestiones manualmente en el día a día.
+`devkit/conanfile.py` es una receta **dual**: sirve tanto para instalar tus propias dependencias (`fmt`, `gtest`, `benchmark`) durante el desarrollo local, como para empaquetar `devkit_shapes` como un paquete Conan consumible por terceros. La distinción se resuelve automáticamente vía el flag `-c user.devkit:local_dev=True` que `scripts/configure.sh` ya pasa por ti — no hace falta que lo gestiones manualmente en el día a día.
 
 Construir y validar el paquete localmente:
 
@@ -559,7 +630,7 @@ Construir y validar el paquete localmente:
 conan create . --build=missing
 ```
 
-Esto compila `devkit_shapes` (sin `app/` ni `test/`), lo empaqueta, y ejecuta `test_package/` — un consumidor de prueba que hace `find_package(devkit)` y verifica que `devkit::shapes` funciona correctamente. Si termina sin errores, el paquete es válido.
+Esto compila `devkit_shapes` (sin `app/`, `test/` ni `benchmark/`), lo empaqueta, y ejecuta `test_package/` — un consumidor de prueba que hace `find_package(devkit)` y verifica que `devkit::shapes` funciona correctamente. Si termina sin errores, el paquete es válido.
 
 Cómo lo usaría otro proyecto (una vez publicado en un remote):
 
@@ -703,6 +774,8 @@ Si necesitas una herramienta nueva del sistema (por ejemplo, otro compilador, un
 | `-DBUILD_SHARED_LIBS=ON` no tiene efecto, `devkit_shapes` sigue compilando estático | `add_library(devkit_shapes STATIC ...)` con el tipo fijado explícitamente ignora `BUILD_SHARED_LIBS` | Ya corregido: `add_library(devkit_shapes ...)` sin `STATIC`/`SHARED` explícito (ver sección 6.12) |
 | Al pasar `-o shared=True` a `conan install`, sale el warning `Unscoped option definition is ambiguous` | Conan 2 no sabe si la opción aplica solo a `devkit` o también a sus dependencias (`fmt`, `gtest`) | Usa `-o "&:shared=True"` (scope explícito al paquete raíz) — ya aplicado en `scripts/configure.sh` al usar el tercer argumento `shared` |
 | Símbolos de una clase/función pública ausentes en `libdevkit_shapes.so` (`nm -D` no la muestra) | Falta el macro `DEVKIT_API` en esa clase/función — `CMAKE_CXX_VISIBILITY_PRESET=hidden` la oculta por defecto | Añade `#include "devkit/export.h"` y marca la clase/función con `DEVKIT_API` (ver sección 6.12) |
+| Un ejecutable con `RUNTIME_OUTPUT_DIRECTORY` fijado por `set_target_properties` (p. ej. `devkit_benchmarks`) sigue apareciendo en `bin/debug/` en vez de la carpeta esperada | Las variables globales `CMAKE_RUNTIME_OUTPUT_DIRECTORY_DEBUG`/`_RELEASE` del `CMakeLists.txt` raíz inicializan la propiedad **específica de configuración** en cada target nuevo, y esa propiedad tiene prioridad sobre la genérica `RUNTIME_OUTPUT_DIRECTORY` fijada manualmente | Fija también las variantes por-configuración (`RUNTIME_OUTPUT_DIRECTORY_DEBUG`, `_RELEASE`, `_RELWITHDEBINFO`) en el `set_target_properties` de ese target, no solo la genérica (ver sección 6.13) |
+| `multiple definition of 'main'` al enlazar `devkit_benchmarks` | Se usó `BENCHMARK_MAIN()` en un `.cpp` **y** se enlazó `benchmark::benchmark_main` a la vez — ambos proveen un `main()` | Elige solo una vía. `devkit` usa `benchmark::benchmark_main` en `target_link_libraries` (igual que `GTest::gtest_main`), así que ningún `.cpp` de `benchmark/` debe llevar `BENCHMARK_MAIN()` (ver sección 6.13) |
 
 ---
 
@@ -737,6 +810,9 @@ find inc src app test -name "*.hpp" -o -name "*.cpp" | xargs clang-format --dry-
 
 # Documentación
 cmake --preset debug -DDEVKIT_BUILD_DOCS=ON && cmake --build temp/build/debug --target docs
+
+# Benchmarks (medir siempre en Release)
+./scripts/configure.sh release && cmake --preset release -DDEVKIT_BUILD_BENCHMARKS=ON && cmake --build --preset release && ./bin/benchmark/devkit_benchmarks
 
 # Ejecutar el binario
 ./bin/debug/devkit
