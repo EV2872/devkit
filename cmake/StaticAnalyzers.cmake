@@ -25,7 +25,7 @@ function(devkit_enable_static_analysis target_name)
         find_program(IWYU include-what-you-use)
         if(IWYU)
             set_target_properties(${target_name} PROPERTIES
-                CXX_INCLUDE_WHAT_YOU_USE "${IWYU};-Xiwyu;--mapping_file=${PROJECT_SOURCE_DIR}/cmake/iwyu.imp"
+                CXX_INCLUDE_WHAT_YOU_USE "${IWYU};-Xiwyu;--mapping_file=${PROJECT_SOURCE_DIR}/cmake/iwyu.imp;-Xiwyu;--no_comments;-Wno-unknown-warning-option"
             )
         else()
             message(WARNING "include-what-you-use solicitado pero no encontrado")

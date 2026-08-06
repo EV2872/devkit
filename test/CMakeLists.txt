@@ -22,7 +22,7 @@ devkit_configure_target(devkit_tests)
 # cada TEST()/TEST_F() por separado, con su propio resultado pass/fail.
 include(GoogleTest)
 gtest_discover_tests(devkit_tests
-    WORKING_DIRECTORY ${PROJECT_SOURCE_DIR}
+    WORKING_DIRECTORY ${PROJECT_BINARY_DIR}
     PROPERTIES LABELS "unit"
 )
 

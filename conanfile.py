@@ -4,15 +4,20 @@ from conan.tools.cmake import CMake, CMakeDeps, CMakeToolchain, cmake_layout
 
 class DevkitConan(ConanFile):
     name = "devkit"
-    version = "0.4.2"
+    version = "0.5.0"
     license = "MIT"
-    url = "https://github.com/tu-usuario/devkit"
+    url = "https://github.com/EV2872/devkit"
     description = "Librería de ejemplo de figuras geométricas (Circle, Rectangle) sobre fmt."
     topics = ("geometry", "shapes", "example")
 
     settings = "os", "compiler", "build_type", "arch"
-    options = {"shared": [True, False], "fPIC": [True, False]}
-    default_options = {"shared": False, "fPIC": True}
+    options = { "shared": [True, False], 
+                "fPIC": [True, False],
+                "test_framework": ["gtest", "catch2"]
+    }
+    default_options = {"shared": False, 
+                       "fPIC": True, 
+                       "test_framework": "gtest"}
 
     exports_sources = (
         "CMakeLists.txt",

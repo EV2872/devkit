@@ -1,4 +1,4 @@
-# Changelog
+# Changelog ejemplo
 
 Todos los cambios notables de este proyecto se documentan aquí.
 El formato sigue [Keep a Changelog](https://keepachangelog.com/es-ES/1.0.0/),

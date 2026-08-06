@@ -65,7 +65,9 @@ devkit/
 ├── app/             # Driver ejecutable (main.cpp), consume la librería
 ├── test/            # Tests (GoogleTest + GoogleMock)
 ├── benchmark/       # Microbenchmarks (Google Benchmark), bajo demanda
+├── fuzz/            # Fuzz targets (libFuzzer, solo Clang), bajo demanda
 ├── test_package/    # Validación del paquete Conan (conan create)
+├── main_injection/  # Ejemplo usando el main() proporcionado por la libreria
 ├── version/          # Template version.h.in
 ├── docs/            # Salida de Doxygen (generado, no versionado)
 ├── coverage/        # Salida de gcovr (generado, no versionado)
@@ -195,6 +197,36 @@ Filtrar por nombre (igual que con gtest):
 ```
 
 Ver sección 6.13 para añadir nuevos benchmarks.
+
+### 4.10. Fuzzing (libFuzzer, requiere Clang)
+
+`fuzz/` contiene fuzz targets con [libFuzzer](https://llvm.org/docs/LibFuzzer.html), integrado en Clang (no disponible con GCC). Desactivado por defecto, se activa con `-DDEVKIT_BUILD_FUZZERS=ON` y **exige** compilar con Clang — `Fuzzing.cmake` falla explícitamente con `FATAL_ERROR` si detecta otro compilador, para no dar una falsa sensación de que "funciona" sin sanitizers de fuzzing reales:
+
+```bash
+rm -rf temp/build (en caso de que previamente compilaras por defecto (gcc) o con la opcion gcc)
+./scripts/configure.sh debug clang
+cmake --preset debug -DDEVKIT_BUILD_FUZZERS=ON
+cmake --build --preset debug
+
+./bin/fuzz/fuzz_shape_printer
+```
+
+**Corpus persistente entre ejecuciones.** Sin argumentos, libFuzzer genera inputs aleatorios en memoria y los descarta al terminar — cada ejecución empieza de cero. Pasándole una carpeta como argumento, libFuzzer **guarda ahí los inputs que descubren nuevos caminos de código** (el "corpus"), y en la siguiente ejecución los reutiliza como punto de partida en vez de generar todo desde cero — el fuzzing se vuelve incremental y más eficaz con cada sesión:
+
+```bash
+mkdir -p fuzz/corpus/shape_printer
+./bin/fuzz/fuzz_shape_printer fuzz/corpus/shape_printer
+```
+
+> `fuzz/corpus/` no se versiona (añádelo a `.gitignore` si no está ya) — es un artefacto local que crece con el uso, no código fuente. Si el fuzzer encuentra un crash, guarda el input exacto que lo provocó en un fichero `crash-<hash>` en el directorio de trabajo actual — consérvalo como caso de test de regresión.
+
+**Limitar la duración con `-max_total_time`** (segundos), imprescindible para no dejarlo corriendo indefinidamente — sin este flag, libFuzzer corre hasta que lo interrumpas manualmente (Ctrl+C):
+
+```bash
+./bin/fuzz/fuzz_shape_printer -max_total_time=60 fuzz/corpus/shape_printer
+```
+
+Ver sección 6.14 para añadir nuevos fuzz targets.
 
 ---
 
@@ -528,13 +560,123 @@ Si añades una nueva clase/función pública a la librería, recuerda marcarla c
 >
 > Si defines `RUNTIME_OUTPUT_DIRECTORY` u otra propiedad de salida por-target, fíjala también por-configuración (`RUNTIME_OUTPUT_DIRECTORY_DEBUG`, `_RELEASE`, etc. — ver `benchmark/CMakeLists.txt`) — las propiedades específicas de configuración, ya inicializadas por las variables globales del `CMakeLists.txt` raíz, tienen prioridad sobre la genérica y la sobreescriben silenciosamente si no se fija también la versión específica (ver tabla de la sección 10).
 
+### 6.14. Añadir un nuevo fuzz target
+
+1. Crea `fuzz/nuevo_fuzz.cpp` con la función de entrada que espera libFuzzer:
+
+   ```cpp
+   #include <cstdint>
+   #include <cstddef>
+
+   #include "devkit/nuevo.hpp"
+
+   extern "C" int LLVMFuzzerTestOneInput(const uint8_t* data, size_t size) {
+       // convierte data/size al tipo de entrada real y ejercita la función,
+       // sin asumir nada sobre el contenido: el objetivo es no crashear ni
+       // disparar UB con CUALQUIER secuencia de bytes.
+       return 0;
+   }
+   ```
+
+2. Regístralo en `fuzz/CMakeLists.txt` con `devkit_add_fuzzer` (un target por fichero):
+
+   ```cmake
+   devkit_add_fuzzer(fuzz_shape_printer shape_printer_fuzz.cpp)
+   devkit_add_fuzzer(fuzz_nuevo nuevo_fuzz.cpp)   # <-- añadir
+   ```
+
+3. Compila con Clang y benchmarks activados (ver sección 4.10):
+
+   ```bash
+   ./scripts/configure.sh debug clang
+   cmake --preset debug -DDEVKIT_BUILD_FUZZERS=ON
+   cmake --build --preset debug
+   ./bin/fuzz/fuzz_nuevo -max_total_time=60 fuzz/corpus/nuevo
+   ```
+
+> Cada fuzz target es independiente (un `add_executable` por `devkit_add_fuzzer`), con su propia carpeta de corpus recomendada bajo `fuzz/corpus/<nombre>/` — no compartas corpus entre fuzz targets distintos, ya que cada uno explora un espacio de entrada diferente.
+
 ---
 
-## 7. Reutilizar `devkit_shapes` en otro proyecto
+# 7. Cambiar Google Test por Catch2
+
+Como tener dos frameworks diferentes para ejecutar tests no tiene mucho sentido, se acabo eligiendo Google Test en vez de Catch2. Para aquellos no contentos con esta idea, acontinuación se les indica que deben modificar:
+
+- En conanfile.py cambiar:
+```python
+def build_requirements(self):
+        self.test_requires("gtest/1.15.0")
+        self.test_requires("benchmark/1.9.0")
+```
+
+por esta posible versión:
+```python
+def build_requirements(self):
+        self.test_requires("catch2/3.7.1")
+        self.test_requires("benchmark/1.9.0")
+```
+
+En test/CMakeLists.txt se debe modificar:
+- El paquete a buscar:
+```cmake
+find_package(GTest REQUIRED)
+```
+debe ser modificado por:
+```cmake
+find_package(Catch2 REQUIRED)
+```
+
+- Cambiar el main de Google Test por el de Catch2:
+```cmake
+target_link_libraries(devkit_tests
+    PRIVATE
+        devkit::shapes
+        GTest::gtest
+        GTest::gtest_main
+        GTest::gmock
+)
+```
+
+debe ser modificado por:
+```cmake
+target_link_libraries(devkit_tests PRIVATE devkit::shapes Catch2::Catch2WithMain)
+```
+
+- Modificar el descrubimiento:
+```cmake
+include(GoogleTest)
+gtest_discover_tests(devkit_tests
+    WORKING_DIRECTORY ${PROJECT_BINARY_DIR}
+    PROPERTIES LABELS "unit"
+)
+```
+
+debe ser modificado por:
+```cmake
+include(Catch)
+catch_discover_tests(devkit_tests
+  WORKING_DIRECTORY ${PROJECT_BINARY_DIR}
+  PROPERTIES LABELS "unit"
+)
+```
+
+Obviamente los test/test.cpp se deben reescribir con las utilidades ofrecidad por Catch2 o no compilaran. Nuevamente se desaconseja utilizar ambos frameworks a la vez ya que solamente añade complejidad, salvo que se este realizando una migración de un framework al otro, lo cual se desaconseja salvo causa critica. Respecto a otras configuraciones como el coverage deberian seguir funcionado sin necesidad de modificaciones. Por último ten en cuenta que a la fecha que se escribe este README Catch2 no tiene soporte para mocks a diferencia de Google Test, en caso de ser de relevancia para usted le recomiendo comprobar si Catch2 añadio la funcionalidad, si no tendra que realizar ajustes manuales a nivel de código para conseguir el efecto deseado.
+
+Por último si la configuracion previa usaba Google Test y no se borro, se recomienda limpiar la cache:
+```bash
+rm -rf temp/build
+./scripts/configure.sh debug
+cmake --build --preset debug
+ctest --preset debug --output-on-failure
+```
+
+---
+
+## 8. Reutilizar `devkit_shapes` en otro proyecto
 
 La librería (`devkit_shapes`, expuesta como `devkit::shapes`) está preparada para ser consumida de cuatro formas distintas. Elige según el caso.
 
-### 7.1. Monorepo / mismo árbol de CMake (`add_subdirectory`)
+### 8.1. Monorepo / mismo árbol de CMake (`add_subdirectory`)
 
 Si `devkit/` vive como subcarpeta de un proyecto más grande:
 
@@ -545,7 +687,7 @@ target_link_libraries(mi_app PRIVATE devkit::shapes)
 
 No requiere nada adicional — el `ALIAS devkit::shapes` ya existe en `src/CMakeLists.txt`.
 
-### 7.2. `FetchContent` (otro repo Git, sin gestor de paquetes)
+### 8.2. `FetchContent` (otro repo Git, sin gestor de paquetes)
 
 ```cmake
 include(FetchContent)
@@ -604,7 +746,7 @@ O equivalentemente, desde la línea de comandos al configurar tu propio proyecto
 
 No hace falta ningún paso adicional para que el ejecutable encuentre el `.so` en tiempo de ejecución: CMake fija automáticamente el RPATH del binario para apuntar a la carpeta de build donde queda `libdevkit_shapes.so` (dentro de `build/_deps/devkit-build/src/`), así que `./mi_proyecto` funciona directamente sin tocar `LD_LIBRARY_PATH`. Esto cambia si luego **instalas** el binario fuera del árbol de build (`cmake --install`) — en ese caso, gestiona el RPATH de instalación como en cualquier proyecto CMake con dependencias compartidas.
 
-### 7.3. `cmake --install` (sin Conan)
+### 8.3. `cmake --install` (sin Conan)
 
 ```bash
 # Dentro del contenedor, en devkit/
@@ -620,7 +762,7 @@ find_package(devkit REQUIRED PATHS /ruta/de/instalacion)
 target_link_libraries(mi_app PRIVATE devkit::shapes)
 ```
 
-### 7.4. Paquete Conan (`conan create` + `test_package`)
+### 8.4. Paquete Conan (`conan create` + `test_package`)
 
 `devkit/conanfile.py` es una receta **dual**: sirve tanto para instalar tus propias dependencias (`fmt`, `gtest`, `benchmark`) durante el desarrollo local, como para empaquetar `devkit_shapes` como un paquete Conan consumible por terceros. La distinción se resuelve automáticamente vía el flag `-c user.devkit:local_dev=True` que `scripts/configure.sh` ya pasa por ti — no hace falta que lo gestiones manualmente en el día a día.
 
@@ -653,9 +795,65 @@ conan upload devkit/0.1.0 -r mi-remote --confirm
 
 > ConanCenter (el remote público oficial) no es adecuado para este proyecto: está pensado para librerías de terceros con un ciclo de vida estable, no para plantillas de proyecto. Si necesitas distribución pública gratuita sin montar infraestructura propia, `FetchContent` sobre un tag de Git (sección 7.2) es la vía más simple; para uso interno en una organización, un remote propio (Artifactory, Cloudsmith, etc.) es la opción recomendada.
 
+### 8.5. `main()` opcional provisto por la librería (`devkit::shapes_main`)
+
+Si un consumidor quiere un binario funcional lo antes posible sin escribir su propio `main()`, `devkit` expone un `main()` de ejemplo como target **separado y opcional**: `devkit::shapes_main`.
+
+```cmake
+include(FetchContent)
+FetchContent_Declare(
+    devkit
+    GIT_REPOSITORY https://github.com/tu-usuario/devkit.git
+    GIT_TAG        v0.4.2
+)
+
+set(DEVKIT_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+set(DEVKIT_BUILD_APP OFF CACHE BOOL "" FORCE)
+set(DEVKIT_BUILD_BENCHMARKS OFF CACHE BOOL "" FORCE)
+
+FetchContent_MakeAvailable(devkit)
+
+# mi_logica.cpp NO define main() — lo provee devkit::shapes_main
+add_executable(mi_proyecto src/mi_logica.cpp)
+
+target_link_libraries(mi_proyecto
+    PRIVATE
+        devkit::shapes_main   # ya arrastra devkit::shapes transitivamente
+        fmt::fmt
+)
+```
+
+Como tenemos ahora main separado debemos cambiar la receta para que vea ambas
+```python
+def package_info(self):
+        #self.cpp_info.libs = ["devkit_shapes"]
+        #self.cpp_info.set_property("cmake_target_name", "devkit::shapes")
+        #self.cpp_info.set_property("cmake_file_name", "devkit")
+        # Componente principal (Lógica)
+        self.cpp_info.components["shapes"].libs = ["devkit_shapes"]
+        self.cpp_info.components["shapes"].requires = ["fmt::fmt"]
+
+        # Componente del Main
+        self.cpp_info.components["shapes_main"].libs = ["devkit_shapes_main"]
+        self.cpp_info.components["shapes_main"].requires = ["shapes"]
+```
+
+```bash
+cmake --preset default                          # estática
+cmake --preset default -DBUILD_SHARED_LIBS=ON    # o compartida
+cmake --build --preset default
+./build/mi_proyecto
+```
+
+**Por qué es un target aparte, no parte de `devkit_shapes`:** si el `main()` viviera dentro de la propia librería `devkit_shapes`, cualquiera que la enlazara junto a su propio `main()` (el caso normal, como `devkit_app` o `mi_proyecto` con `mi_logica.cpp` propio) tendría **dos** definiciones de `main()` y el enlazado fallaría. Separándolo en `devkit_shapes_main` (`src/devkit_main.cpp`, con `target_link_libraries(devkit_shapes_main PUBLIC devkit_shapes)`), el consumidor **elige** si quiere ese `main()` (enlazando `devkit::shapes_main`) o el suyo propio (enlazando solo `devkit::shapes`) — nunca ambos a la vez. Es el mismo principio que discutimos para `benchmark::benchmark_main`/`GTest::gtest_main`: solo tiene sentido cuando el propio framework necesita controlar el punto de entrada; aquí se ofrece como una comodidad opcional, no como el comportamiento por defecto.
+
+Si no necesitas este `main()` de ejemplo (el caso más común, cuando tu proyecto ya tiene su propia lógica de arranque), simplemente enlaza `devkit::shapes` como en el resto de ejemplos de esta sección — `devkit::shapes_main` es puramente opt-in.
+
+En main_injection/ tambien se muestra un ejemplo pequeño haciendo uso del main proporcionado por la libreria.
+
 ---
 
-## 8. Cómo actualizar la versión correctamente
+## 9. Cómo actualizar la versión correctamente
 
 Este proyecto sigue [Versionado Semántico](https://semver.org/lang/es/) (`MAJOR.MINOR.PATCH`):
 
@@ -665,7 +863,7 @@ Este proyecto sigue [Versionado Semántico](https://semver.org/lang/es/) (`MAJOR
 
 Tanto `write_basic_package_version_file(... COMPATIBILITY SameMajorVersion)` (CMake) como cualquier consumidor de Conan que fije un rango de versión asumen que sigues este esquema — no es opcional si otros dependen de tu librería.
 
-### 8.1. Dónde vive el número de versión
+### 9.1. Dónde vive el número de versión
 
 Hay **dos** sitios que deben mantenerse sincronizados manualmente (CMake no puede leer el `conanfile.py` y viceversa):
 
@@ -676,7 +874,7 @@ Hay **dos** sitios que deben mantenerse sincronizados manualmente (CMake no pued
 
 Todo lo demás se deriva automáticamente de `CMakeLists.txt`: `devkit::version::kVersionString` (vía `version/version.h.in`), la versión mostrada en Doxygen, y `devkitConfigVersion.cmake`.
 
-### 8.2. Flujo recomendado al publicar una nueva versión
+### 9.2. Flujo recomendado al publicar una nueva versión
 
 ```bash
 # 1. Actualiza el número en AMBOS ficheros:
@@ -714,7 +912,9 @@ FetchContent_Declare(
 )
 ```
 
-### 8.3. Usa `scripts/release.sh` para evitar desincronizar los dos ficheros
+Cambian v0.2.0 por main en caso de querer usar siempre la ultima versión
+
+### 9.3. Usa `scripts/release.sh` para evitar desincronizar los dos ficheros
 
 En vez de editar `CMakeLists.txt` y `conanfile.py` a mano (fácil olvidar uno de los dos), usa el script auxiliar:
 
@@ -722,13 +922,13 @@ En vez de editar `CMakeLists.txt` y `conanfile.py` a mano (fácil olvidar uno de
 ./scripts/release.sh 0.2.0
 ```
 
-Esto actualiza ambos ficheros de forma atómica. Después, sigue desde el paso 4 del flujo anterior (`CHANGELOG.md`, commit, tag, push).
+Esto actualiza ambos ficheros de forma atómica. Después, sigue desde el paso 4 del flujo anterior (`CHANGELOG.md`, commit, tag, push). Además el script muestra un mensaje indicando los siguientes/comandos pasos a realizar.
 
-### 8.4. `CHANGELOG.md`
+### 9.4. `CHANGELOG.md`
 
 El proyecto mantiene un `CHANGELOG.md` en la raíz siguiendo [Keep a Changelog](https://keepachangelog.com/es-ES/1.0.0/). Cada cambio relevante se anota primero bajo `[Unreleased]`, y al hacer un release esa sección se renombra con la versión y fecha correspondientes, dejando `[Unreleased]` vacío para el siguiente ciclo.
 
-### 8.5. Errores comunes a evitar
+### 9.5. Errores comunes a evitar
 
 - **Tag sin actualizar `project(VERSION ...)`**: un consumidor que use `GIT_TAG v0.2.0` obtendría código correcto, pero `devkit::version::kVersionString` seguiría reportando la versión antigua — inconsistencia silenciosa. Usa `scripts/release.sh` para evitarlo.
 - **Cambiar la API pública sin subir el MAJOR**: rompe a cualquier consumidor que fije `devkit/[>=0.1.0 <1.0.0]` en su `conanfile.py`, ya que confían en que los minors son compatibles hacia atrás.
@@ -736,7 +936,7 @@ El proyecto mantiene un `CHANGELOG.md` en la raíz siguiendo [Keep a Changelog](
 
 ---
 
-## 9. Añadir nuevas herramientas al entorno (Dockerfile)
+## 10. Añadir nuevas herramientas al entorno (Dockerfile)
 
 Si necesitas una herramienta nueva del sistema (por ejemplo, otro compilador, un profiler distinto, etc.):
 
@@ -755,7 +955,7 @@ Si necesitas una herramienta nueva del sistema (por ejemplo, otro compilador, un
 
 ---
 
-## 10. Resolución de problemas comunes
+## 11. Resolución de problemas comunes
 
 | Síntoma | Causa habitual | Solución |
 |---|---|---|
@@ -776,10 +976,118 @@ Si necesitas una herramienta nueva del sistema (por ejemplo, otro compilador, un
 | Símbolos de una clase/función pública ausentes en `libdevkit_shapes.so` (`nm -D` no la muestra) | Falta el macro `DEVKIT_API` en esa clase/función — `CMAKE_CXX_VISIBILITY_PRESET=hidden` la oculta por defecto | Añade `#include "devkit/export.h"` y marca la clase/función con `DEVKIT_API` (ver sección 6.12) |
 | Un ejecutable con `RUNTIME_OUTPUT_DIRECTORY` fijado por `set_target_properties` (p. ej. `devkit_benchmarks`) sigue apareciendo en `bin/debug/` en vez de la carpeta esperada | Las variables globales `CMAKE_RUNTIME_OUTPUT_DIRECTORY_DEBUG`/`_RELEASE` del `CMakeLists.txt` raíz inicializan la propiedad **específica de configuración** en cada target nuevo, y esa propiedad tiene prioridad sobre la genérica `RUNTIME_OUTPUT_DIRECTORY` fijada manualmente | Fija también las variantes por-configuración (`RUNTIME_OUTPUT_DIRECTORY_DEBUG`, `_RELEASE`, `_RELWITHDEBINFO`) en el `set_target_properties` de ese target, no solo la genérica (ver sección 6.13) |
 | `multiple definition of 'main'` al enlazar `devkit_benchmarks` | Se usó `BENCHMARK_MAIN()` en un `.cpp` **y** se enlazó `benchmark::benchmark_main` a la vez — ambos proveen un `main()` | Elige solo una vía. `devkit` usa `benchmark::benchmark_main` en `target_link_libraries` (igual que `GTest::gtest_main`), así que ningún `.cpp` de `benchmark/` debe llevar `BENCHMARK_MAIN()` (ver sección 6.13) |
+| `CMake Error: DEVKIT_BUILD_FUZZERS requiere Clang` al configurar con `-DDEVKIT_BUILD_FUZZERS=ON` | libFuzzer (`-fsanitize=fuzzer`) solo está integrado en Clang, no en GCC | Reconfigura con `./scripts/configure.sh debug clang` (ver sección 4.10) |
 
 ---
 
-## 11. Referencia rápida de comandos
+## 12. CI/CD: matriz de compiladores y release automático
+
+### 12.1. Matriz de compiladores (GCC + Clang) en CI
+
+El job `build-and-test-debug` de `.github/workflows/ci.yml` corre en paralelo con GCC y Clang, usando el mismo segundo argumento de `scripts/configure.sh` que usas localmente:
+
+```yaml
+  build-and-test-debug:
+    needs: build-image
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        compiler: [gcc, clang]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with: { name: devkit-image, path: /tmp }
+      - run: docker load -i /tmp/devkit-image.tar
+
+      - name: Configure, build and test (${{ matrix.compiler }})
+        run: |
+          docker run --rm -v ${{ github.workspace }}:/home/dev/project \
+            ${{ env.IMAGE_NAME }} bash -c '
+              ./scripts/configure.sh debug ${{ matrix.compiler }} &&
+              cmake --build --preset debug &&
+              ctest --preset debug --output-on-failure
+            '
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-debug-${{ matrix.compiler }}
+          path: temp/build/debug/Testing/
+          retention-days: 7
+```
+
+`fail-fast: false` asegura que si Clang falla, sigues viendo el resultado completo de GCC (y viceversa) en vez de que se cancele el otro job de la matriz. No hace falta tocar `ci-success`: GitHub Actions ya espera a que **todas** las combinaciones de la matriz terminen antes de considerar satisfecho ese `needs`.
+
+### 12.2. Release automático al hacer push de un tag
+
+### Ruta: `.github/workflows/release.yml` (nuevo, separado de `ci.yml`)
+
+```yaml
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+env:
+  IMAGE_NAME: devkit-fedora-env
+
+jobs:
+  build-release-binaries:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build dev image
+        run: docker compose -f docker/docker-compose.yml build dev-env
+
+      - name: Configure, build and test (Release)
+        run: |
+          docker run --rm -v ${{ github.workspace }}:/home/dev/project \
+            ${{ env.IMAGE_NAME }} bash -c '
+              ./scripts/configure.sh release &&
+              cmake --build --preset release &&
+              ctest --build-config Release --test-dir temp/build/release --output-on-failure
+            '
+
+      - name: Package binaries
+        run: |
+          mkdir -p release-artifacts
+          tar -czf release-artifacts/devkit-${{ github.ref_name }}-linux-x86_64.tar.gz \
+            -C bin/release .
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release-artifacts/*.tar.gz
+          generate_release_notes: true
+          body_path: CHANGELOG.md
+```
+
+Se dispara automáticamente al empujar un tag `vX.Y.Z` — es el paso final del flujo de `scripts/release.sh` (sección 8.3):
+
+```bash
+./scripts/release.sh 0.3.0
+# edita CHANGELOG.md, revisa, compila localmente si quieres verificar antes
+git add -A && git commit -m "Bump version to 0.3.0"
+git tag -a v0.3.0 -m "Release 0.3.0"
+git push origin main --tags   # <-- dispara release.yml
+```
+
+El workflow compila en Release, corre los tests, empaqueta `bin/release/*` en `devkit-vX.Y.Z-linux-x86_64.tar.gz`, y crea automáticamente el Release en GitHub con notas autogeneradas más el contenido de `CHANGELOG.md`. Verifica el resultado en la pestaña **Actions** y el binario publicado en **Releases**.
+
+---
+
+## 13 VS-Code extensions
+
+Most people use VS-Code even to develope inside a Docker container, .devcontainer/devcontainer.json holds the configuration to enable them inside Docker containers. It should be enough specially to eliminate false positive sintax errors.
+
+---
+
+## 14. Referencia rápida de comandos
 
 ```bash
 # Entorno
@@ -816,4 +1124,10 @@ cmake --preset debug -DDEVKIT_BUILD_DOCS=ON && cmake --build temp/build/debug --
 
 # Ejecutar el binario
 ./bin/debug/devkit
+
+# Fuzzing (requiere Clang)
+./scripts/configure.sh debug clang && cmake --preset debug -DDEVKIT_BUILD_FUZZERS=ON && cmake --build --preset debug && mkdir -p fuzz/corpus/shape_printer && ./bin/fuzz/fuzz_shape_printer -max_total_time=60 fuzz/corpus/shape_printer
+
+# Publicar un release (dispara release.yml en CI)
+./scripts/release.sh 0.3.0 && git add -A && git commit -m "Bump version to 0.3.0" && git tag -a v0.3.0 -m "Release 0.3.0" && git push origin main --tags
 ```

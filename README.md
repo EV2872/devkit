@@ -4,6 +4,12 @@
 
 Configure a C++ project is basically a TORTURE for new users, specially the fact that nowadays every profesional project regardless of the lenguaje uses a bunch of tools delevoped by different people, making it harder to synchronize, find what you need in their documentation... This template might be a overkill for people learning C++ or that they know it but at the same time not really familiarized with the ecosystem that surounds it, firstly I recommend getting familiarized with some of the tools before combining all of them, specially the compiler's options, CMake, Conan and Docker. At the same time I want to state that this template doesnt need to be the perfect template but a set of good practices to make your code reproducible everywhere, let other projects/people to use your library. Feel free to do whatever the MIT lincense allows you to do.
 
+# IMPORTANT
+
+For now there is only support for Linux envirioments due lack of knowledge of Windows systems for developement since I would like to offer the best practices, but some of the configurations can be used in both envirioments, also some users might want to use system calls from Linux making it harder to be portable.
+
+There is only support for Github Actions or fetch content from CMake in case that somebody wanted support por Codeberg but it shouldn't be that difficult to add it or migrate.
+
 ## Software development best practices taken in consideration
 
 Agnostic to programming lenguaje best practices enforced in software development:
@@ -42,3 +48,11 @@ The common problems/configuration in a C++ project that we want to take in consi
 All you need is Docker and Docker-Compose, usually they even come together through the installation process. The exact version used:
 - Docker version 29.6.2, build 1.fc44
 - Docker Compose version 5.3.1
+
+## Technical notes
+
+Acces to notes/README.md to understand the configuration and use it.
+
+## Recomendations
+
+Any upgrade/recomendation is succeptible of being acepted but always with education.
